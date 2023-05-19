@@ -1,0 +1,32 @@
+[package]
+name = "legoseq"
+authors = ["Pidong Li<lipidong@126.com>"]
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "blockalignlib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "blockalign"
+path = "src/main.rs"
+
+[dependencies]
+bio = '1.1.0'
+bio-types = "*"
+clap = {version = "^4.1", features = ["derive"]}
+rayon = "1.2"
+tracing = "*"
+terminal_size = "*"
+tracing-subscriber = "0.3.11"
+rand="*"
+crossbeam-channel = ">=0.5"
+flate2 = ">=1.0"
+once_cell = "*"
+anyhow = "*"
+serde = { version = "1", features = ["derive"] }
+# ant = {git="https://github.com/dongspy/ant.git"}
+ant = {path="../ant"}
+csv = "1.1"
