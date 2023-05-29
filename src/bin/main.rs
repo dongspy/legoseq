@@ -16,12 +16,12 @@ use std::sync::{Arc, Mutex};
 use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt::format;
 
-use blockalignlib::aligner::Alignment;
-use blockalignlib::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
-use blockalignlib::blockinfo::{get_block_info, BlockInfo, BLOCKFLAGS};
-use blockalignlib::utils::get_reader;
+use legoseq::aligner::Alignment;
+use legoseq::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
+use legoseq::blockinfo::{get_block_info, BlockInfo, BLOCKFLAGS};
+use legoseq::utils::get_reader;
 
-use blockalignlib::blockalign::ReadBlockAlign;
+use legoseq::blockalign::ReadBlockAlign;
 
 static CLI: Lazy<Cli> = Lazy::new(Cli::parse);
 
