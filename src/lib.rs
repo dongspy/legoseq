@@ -3,3 +3,4 @@ pub mod blockalign;
 pub mod blockinfo;
 pub mod utils;
 pub mod wasm;
+pub mod wapper;

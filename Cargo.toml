@@ -8,7 +8,7 @@ edition = "2021"
 [lib]
 name = "legoseq"
 path = "src/lib.rs"
-crate-type = ["rlib", "cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "legoseq"
@@ -20,7 +20,7 @@ bio-types = "*"
 clap = {version = "^4.1", features = ["derive"]}
 rayon = "1.2"
 tracing = "*"
-terminal_size = "*"
+# terminal_size = "*"
 tracing-subscriber = "0.3.11"
 rand="*"
 getrandom = { version = "0.2", features = ["js"] }
@@ -33,3 +33,5 @@ serde = { version = "1", features = ["derive"] }
 ant = {path="../../ant"}
 csv = "1.1"
 wasm-bindgen = "0.2"
+# rust-htslib="0.40.2"
+tempfile = "*"

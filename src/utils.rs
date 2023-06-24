@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Read};
+use std::fs::{File, self};
+use std::io::{BufReader, Read, self};
+use std::path::{PathBuf, Path};
 
 use anyhow::Result;
 use bio::alphabets::dna::complement;
@@ -32,6 +33,20 @@ pub fn read_fasta(fa_file: &str) -> Result<HashMap<String, Vec<u8>>> {
         index_hash.insert(sample_name.to_owned(), record.seq().to_vec());
     }
     Ok(index_hash)
+}
+
+pub fn write_fasta(seq_map: &HashMap<String, Vec<u8>>, out_file: &str) -> Result<()>{
+    let handle = io::BufWriter::new(
+        fs::File::create(out_file).unwrap()
+    );
+    let mut writer = fasta::Writer::new(handle);
+    seq_map.iter().for_each(|(read_id, seq)| {
+        let record = fasta::Record::with_attrs(read_id, None, seq);
+        let write_result = writer.write_record(&record);
+    });
+
+
+    Ok(())
 }
 
 pub fn revcomp(seq: &[u8]) -> Vec<u8> {

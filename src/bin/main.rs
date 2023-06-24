@@ -20,7 +20,6 @@ use legoseq::aligner::Alignment;
 use legoseq::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
 use legoseq::blockinfo::{get_block_info, BlockInfo, BLOCKFLAGS};
 use legoseq::utils::get_reader;
-
 use legoseq::blockalign::ReadBlockAlign;
 
 static CLI: Lazy<Cli> = Lazy::new(Cli::parse);
