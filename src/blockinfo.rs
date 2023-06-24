@@ -10,7 +10,7 @@ use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use tempfile::{tempfile, tempdir};
 use std::io::Cursor;
-
+use anyhow::Result;
 
 
 use crate::aligner::BAligner;
@@ -149,7 +149,7 @@ struct BlockInfoFileWithoutFasta {
     method: AlignMethod,
 }
 
-pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Vec<BlockInfo>{
+pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<BlockInfo>>{
         let mut rdr = ReaderBuilder::new().delimiter(b'\t').from_reader(blockinfo_str.as_bytes());
         // let mut rdr = csv::ReaderBuilder::new().delimiter(b'\t').from_reader(file);
     let mut block_info_vec: Vec<BlockInfo> = vec![];
@@ -212,7 +212,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Vec<BlockIn
         flag *= 2;
         block_info_vec.push(bi);
     }
-    block_info_vec
+    Ok(block_info_vec)
 }
 
 #[test]
