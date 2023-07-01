@@ -113,9 +113,10 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
             HashMap::new()
         };
 
+        let seq_hash = read_fasta(&record.fasta_file.unwrap()).expect("read reference fasta file failed");
         let aligner = BAligner::new(
             record.method,
-            &record.fasta_file.unwrap(),
+            &seq_hash,
             record.max_mismatch,
         );
         let bi = BlockInfo {
@@ -188,13 +189,14 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
             |&x| (x.to_string(), fasta_seq.get(x).expect(&format!("{} not in the fasta file", &x)).to_owned()) ).collect();
         
         // let mut sub_fasta_file = NamedTempFile::new().unwrap();
-        let dir = tempdir().unwrap();
-        let sub_fasta_file = dir.path().join(format!("{}.sub.fa", record.idx)).into_os_string().into_string().unwrap();
-        write_fasta(&seqs, &sub_fasta_file);
-        dbg!(&sub_fasta_file);
+        // let dir = tempdir().unwrap();
+        // let sub_fasta_file = dir.path().join(format!("{}.sub.fa", record.idx)).into_os_string().into_string().unwrap();
+        // let sub_fasta_file = format!("{}.sub.fa", record.idx);
+        // write_fasta(&seqs, &sub_fasta_file);
+        // dbg!(&sub_fasta_file);
         let aligner = BAligner::new(
             record.method,
-            &sub_fasta_file,
+            &seqs,
             record.max_mismatch,
         );
         let bi = BlockInfo {

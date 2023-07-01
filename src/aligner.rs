@@ -6,7 +6,7 @@ use antlib::{
 };
 use bio::alignment::pairwise::banded::Aligner;
 use bio::alignment::AlignmentOperation::{self, *};
-use std::{fmt::Debug, path::{PathBuf, Path}};
+use std::{fmt::Debug, path::{PathBuf, Path}, collections::HashMap};
 
 use crate::utils::{read_fasta, revcomp};
 
@@ -169,8 +169,9 @@ pub enum BAligner {
 
 impl BAligner {
     // impl BAligner {
-    pub fn new(method: AlignMethod, fasta_file: &str, max_mismatch: usize) -> BAligner {
-        let seq_hash = read_fasta(fasta_file).unwrap();
+    pub fn new(method: AlignMethod, seq_hash: &HashMap<String, Vec<u8>>, max_mismatch: usize) -> BAligner {
+        // let seq_hash = read_fasta(fasta_file).unwrap();
+        
         let (seq_name, seq) = seq_hash.iter().next().unwrap();
         match method {
             AlignMethod::SW => {
@@ -192,7 +193,9 @@ impl BAligner {
                 BAligner::BandedAligner(bandedaligner)
             }
             AlignMethod::ANT => {
-                let index = AntIndex::create_from_files(fasta_file, 1, 1).unwrap();
+                // let seq_hash = read_fasta(fasta_file).unwrap();
+                // let index = AntIndex::create_from_files(fasta_file, 1, 1).unwrap();
+                let index = AntIndex::create_from_hashmap(seq_hash, 1, 1).unwrap();
                 let align_opts = AntAlignOpts {
                     min_seed_len: 11,
                     min_match_counts_percent: 0.0,
@@ -223,7 +226,8 @@ impl BAligner {
 fn test_baligner() {
     use std::time::{Duration, Instant};
     let now = Instant::now();
-    let alingner = BAligner::new(AlignMethod::ANT, "/Users/pidong/tmp/ont_p5.index.fa", 5);
+    let seq_hash = read_fasta("/Users/pidong/tmp/ont_p5.index.fa").expect("read fasta error");
+    let alingner = BAligner::new(AlignMethod::ANT, &seq_hash, 5);
     // aligner
     // let aligner = get_aligner(AlignMethod::ANT, "test/index.fa");
     let read =
