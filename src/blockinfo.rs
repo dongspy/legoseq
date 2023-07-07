@@ -1,17 +1,17 @@
 #![allow(unused)]
+use anyhow::Result;
 use bio::io::fasta;
 use csv::{ReaderBuilder, StringRecord};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
+use tracing::info;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::hash::Hash;
+use std::io::{BufReader, Cursor, Read};
 use std::sync::{Arc, Mutex};
-use tempfile::{tempfile, tempdir};
-use std::io::Cursor;
-use anyhow::Result;
-
+use tempfile::{tempdir, tempfile};
 
 use crate::aligner::BAligner;
 use crate::utils::{read_fasta, write_fasta};
@@ -82,7 +82,6 @@ struct BlockInfoFile {
     method: AlignMethod,
 }
 
-
 /// read block.info.tsv 获取 blockinfo 信息方便后面以 blockinfo 为基础, 对 read 进行比对
 pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
     let file = File::open(file_path).unwrap();
@@ -113,12 +112,9 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
             HashMap::new()
         };
 
-        let seq_hash = read_fasta(&record.fasta_file.unwrap()).expect("read reference fasta file failed");
-        let aligner = BAligner::new(
-            record.method,
-            &seq_hash,
-            record.max_mismatch,
-        );
+        let seq_hash =
+            read_fasta(&record.fasta_file.unwrap()).expect("read reference fasta file failed");
+        let aligner = BAligner::new(record.method, &seq_hash, record.max_mismatch);
         let bi = BlockInfo {
             idx: record.idx.clone(),
             seq_type: record.seq_type,
@@ -137,7 +133,6 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
     block_info_vec
 }
 
-
 #[derive(Debug, Clone, Default, Deserialize)]
 struct BlockInfoFileWithoutFasta {
     idx: String,
@@ -150,18 +145,43 @@ struct BlockInfoFileWithoutFasta {
     method: AlignMethod,
 }
 
-pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<BlockInfo>>{
-        let mut rdr = ReaderBuilder::new().delimiter(b'\t').from_reader(blockinfo_str.as_bytes());
-        // let mut rdr = csv::ReaderBuilder::new().delimiter(b'\t').from_reader(file);
+/// 从文件读取 blockinfo 信息 及 fasta 信息
+pub fn get_block_info_fasta_from_file(
+    blockinfo_file: &str,
+    fasta_file: &str,
+) -> Result<Vec<BlockInfo>> {
+    let mut blockinfo_f = File::open(blockinfo_file)?;
+    let mut blockinfo_str = String::new();
+    blockinfo_f
+        .read_to_string(&mut blockinfo_str)
+        .expect("read blockinfo file error");
+
+    let mut fasta_f = File::open(fasta_file)?;
+    let mut fasta_str = String::new();
+    fasta_f
+        .read_to_string(&mut fasta_str)
+        .expect("read fasta file error");
+    // let blockinfo_str =
+    get_block_info_fasta(&blockinfo_str, &fasta_str)
+}
+
+/// get the block info from string to support the wasm
+pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<BlockInfo>> {
+    let mut rdr = ReaderBuilder::new()
+        .delimiter(b'\t')
+        .from_reader(blockinfo_str.as_bytes());
+    // let mut rdr = csv::ReaderBuilder::new().delimiter(b'\t').from_reader(file);
     let mut block_info_vec: Vec<BlockInfo> = vec![];
     let mut flag: usize = 1;
     // let fasta_seq = read_fasta(fasta_file).unwrap();
     // let fasta_record = fasta::Record::from_bufread()
+    info!(fasta_str);
     let reader = fasta::Reader::new(Cursor::new(fasta_str));
-    let fasta_seq: HashMap<String, Vec<u8>> = reader.records()
-                                                    .into_iter()
-                                                    .map(|x| x.unwrap())
-                                                    .map(|x| (x.id().to_string(), x.seq().to_vec())).collect();
+    let fasta_seq: HashMap<String, Vec<u8>> = reader
+        .records()
+        .map(|x| x.unwrap())
+        .map(|x| (x.id().to_string(), x.seq().to_vec()))
+        .collect();
 
     for result in rdr.deserialize() {
         let record: BlockInfoFileWithoutFasta = result.unwrap();
@@ -181,24 +201,34 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
             block_info_vec.push(bi);
             continue;
         }
-        
-        let fasta_seq_id = record.fasta_seq_id.clone().expect("fasta_seq_id in fix mod must be set");
-        let fasta_seq_id_vec: Vec<&str> = fasta_seq_id.split(',').collect();
 
-        let seqs : HashMap<String, Vec<u8>>= (&fasta_seq_id_vec).iter().map(
-            |&x| (x.to_string(), fasta_seq.get(x).expect(&format!("{} not in the fasta file", &x)).to_owned()) ).collect();
-        
+        let fasta_seq_id = record
+            .fasta_seq_id
+            .clone()
+            .expect("fasta_seq_id in fix mod must be set");
+        let fasta_seq_id_vec: Vec<&str> = fasta_seq_id.split(',').collect();
+        info!("fasta record ids: {}", fasta_seq_id_vec.join(";"));
+
+        let seqs: HashMap<String, Vec<u8>> = (&fasta_seq_id_vec)
+            .iter()
+            .map(|&x| {
+                (
+                    x.to_string(),
+                    fasta_seq
+                        .get(x)
+                        .unwrap_or_else(|| panic!("{} not in the fasta file", &x))
+                        .to_owned(),
+                )
+            })
+            .collect();
+
         // let mut sub_fasta_file = NamedTempFile::new().unwrap();
         // let dir = tempdir().unwrap();
         // let sub_fasta_file = dir.path().join(format!("{}.sub.fa", record.idx)).into_os_string().into_string().unwrap();
         // let sub_fasta_file = format!("{}.sub.fa", record.idx);
         // write_fasta(&seqs, &sub_fasta_file);
         // dbg!(&sub_fasta_file);
-        let aligner = BAligner::new(
-            record.method,
-            &seqs,
-            record.max_mismatch,
-        );
+        let aligner = BAligner::new(record.method, &seqs, record.max_mismatch);
         let bi = BlockInfo {
             idx: record.idx.clone(),
             seq_type: record.seq_type,
@@ -227,7 +257,7 @@ fn test_get_block_info() {
 }
 
 #[test]
-fn test_get_block_info_fasta(){
+fn test_get_block_info_fasta() {
     let blockinfo_str = "idx	seq_type	fasta_seq_id	max_mismatch	query_start	query_end	seq_len	method
 aa	Anchor	aa1,aa2	2				ANT
 bb	Anchor	bb1,bb2	2				ANT

@@ -6,7 +6,11 @@ use antlib::{
 };
 use bio::alignment::pairwise::banded::Aligner;
 use bio::alignment::AlignmentOperation::{self, *};
-use std::{fmt::Debug, path::{PathBuf, Path}, collections::HashMap};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    path::{Path, PathBuf},
+};
 
 use crate::utils::{read_fasta, revcomp};
 
@@ -73,7 +77,6 @@ impl Align for AntAligner {
         // self.index.align(x, y)
         // let index = Index::create_from_files("test/index.fa", 1, 1).unwrap();
         let binding = ant_align(&self.index, seq, &self.opts);
-        dbg!(&binding);
         let align = binding.get(0);
         if let Some(align) = align {
             let gx_aln = align.gx_aln.clone();
@@ -84,7 +87,7 @@ impl Align for AntAligner {
                 .filter(|&&x| x == Match)
                 .count();
 
-            dbg!(self.max_mismatch);
+            // dbg!(self.max_mismatch);
             if (gx_aln.ylen - n_match) > self.max_mismatch {
                 return None;
             }
@@ -169,9 +172,13 @@ pub enum BAligner {
 
 impl BAligner {
     // impl BAligner {
-    pub fn new(method: AlignMethod, seq_hash: &HashMap<String, Vec<u8>>, max_mismatch: usize) -> BAligner {
+    pub fn new(
+        method: AlignMethod,
+        seq_hash: &HashMap<String, Vec<u8>>,
+        max_mismatch: usize,
+    ) -> BAligner {
         // let seq_hash = read_fasta(fasta_file).unwrap();
-        
+
         let (seq_name, seq) = seq_hash.iter().next().unwrap();
         match method {
             AlignMethod::SW => {

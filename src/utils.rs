@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::fs::{File, self};
-use std::io::{BufReader, Read, self};
-use std::path::{PathBuf, Path};
+use std::fs::{self, File};
+use std::io::{self, BufReader, Read};
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use bio::alphabets::dna::complement;
@@ -35,16 +36,13 @@ pub fn read_fasta(fa_file: &str) -> Result<HashMap<String, Vec<u8>>> {
     Ok(index_hash)
 }
 
-pub fn write_fasta(seq_map: &HashMap<String, Vec<u8>>, out_file: &str) -> Result<()>{
-    let handle = io::BufWriter::new(
-        fs::File::create(out_file).unwrap()
-    );
+pub fn write_fasta(seq_map: &HashMap<String, Vec<u8>>, out_file: &str) -> Result<()> {
+    let handle = io::BufWriter::new(fs::File::create(out_file).unwrap());
     let mut writer = fasta::Writer::new(handle);
     seq_map.iter().for_each(|(read_id, seq)| {
         let record = fasta::Record::with_attrs(read_id, None, seq);
         let write_result = writer.write_record(&record);
     });
-
 
     Ok(())
 }
@@ -63,4 +61,105 @@ fn test_revcomp() {
     assert_eq!(&rc_seq, b"CCGGAATT")
 
     // dbg!(rc_seq);
+}
+
+/// union multiple Range
+pub fn union(ranges: Vec<std::ops::Range<i32>>) -> Vec<std::ops::Range<i32>> {
+    let mut sorted_ranges = ranges.clone();
+    sorted_ranges.sort_by(|a, b| a.start.cmp(&b.start));
+
+    let mut result = Vec::new();
+    let mut current = sorted_ranges[0].clone();
+
+    for range in sorted_ranges {
+        if range.start <= current.end {
+            current.end = current.end.max(range.end);
+        } else {
+            result.push(current);
+            current = range;
+        }
+    }
+
+    result.push(current);
+    result
+}
+
+/// range difference
+fn difference(
+    range1: std::ops::Range<i32>,
+    ranges: Vec<std::ops::Range<i32>>,
+) -> Vec<std::ops::Range<i32>> {
+    let mut sorted_ranges = ranges.clone();
+    sorted_ranges.sort_by(|a, b| a.start.cmp(&b.start));
+
+    let mut result = Vec::new();
+    let mut current = range1.clone();
+
+    for range in sorted_ranges {
+        if range.start <= current.end {
+            if current.start < range.start {
+                result.push(current.start..range.start);
+            }
+            if current.end > range.end {
+                current.start = range.end;
+            } else {
+                return result;
+            }
+        }
+    }
+
+    result.push(current.start..current.end);
+    result
+}
+
+pub fn dna_to_spans(dna: &str, ranges: &[(Range<usize>, String)], other_class: &str) -> String {
+    let mut sorted_ranges = ranges.to_vec();
+    sorted_ranges.sort_by(|a, b| a.0.start.cmp(&b.0.start));
+
+    let mut result = String::new();
+    let mut current_end = 0;
+
+    for (range, class) in sorted_ranges {
+        if range.start > current_end {
+            result.push_str(&format!(
+                "<span class='{}'>{}</span>",
+                other_class,
+                &dna[current_end..range.start]
+            ));
+        }
+        result.push_str(&format!(
+            "<span class='{}'>{}</span>",
+            class,
+            &dna[range.start..range.end]
+        ));
+        current_end = range.end;
+    }
+
+    if current_end < dna.len() {
+        result.push_str(&format!(
+            "<span class='{}'>{}</span>",
+            other_class,
+            &dna[current_end..]
+        ));
+    }
+
+    result
+}
+
+#[test]
+fn test_dna_to_spans() {
+    let dna = "ACGTACGTACGTACGTACGTACGTACGTACGT";
+    let ranges = [
+        (2..6, "A".to_string()),
+        (8..12, "B".to_string()),
+        (14..18, "C".to_string()),
+    ];
+
+    let output = dna_to_spans(dna, &ranges, "other");
+    assert_eq!(
+        &output,
+        "<span class='other'>AC</span><span class='A'>GTAC</span>\
+<span class='other'>GT</span><span class='B'>ACGT</span><span class='other'>AC</span>\
+<span class='C'>GTAC</span><span class='other'>GTACGTACGTACGT</span>"
+    )
 }

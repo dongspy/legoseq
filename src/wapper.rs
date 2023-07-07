@@ -17,9 +17,7 @@ use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt::format;
 
 use crate::aligner::Alignment;
+use crate::blockalign::ReadBlockAlign;
 use crate::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
 use crate::blockinfo::{get_block_info, BlockInfo, BLOCKFLAGS};
 use crate::utils::get_reader;
-use crate::blockalign::ReadBlockAlign;
-
-

@@ -1,9 +1,8 @@
+use crate::blockalign::ReadBlockAlign;
+use crate::blockinfo::get_block_info_fasta;
+use bio::io::fastq::{self, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
-use crate::blockinfo::get_block_info_fasta;
-use crate::blockalign::ReadBlockAlign;
-use bio::io::fastq;
-
 
 #[wasm_bindgen]
 extern "C" {
@@ -36,7 +35,6 @@ pub fn add(a: i32, b: i32) -> i32 {
 
 #[wasm_bindgen]
 pub fn test(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> String {
-
     "abcd".to_string()
 }
 
@@ -46,25 +44,22 @@ pub fn add_text(a: &str, b: &str) -> String {
 }
 
 #[wasm_bindgen]
-pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> String {
+pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> JsValue {
     // let seq_info: Vec<&str> = seq_info.split('|').collect();
-    
-    let block_info_vec = get_block_info_fasta(blockinfo_str, fasta_file).expect("blockinfo error");   
-    console_log!("the length of block_info_vec is {}", block_info_vec.len()); 
+
+    let block_info_vec = get_block_info_fasta(blockinfo_str, fasta_file).expect("blockinfo error");
+    console_log!("the length of block_info_vec is {}", block_info_vec.len());
     let records = fastq::Reader::new(seq_info.as_bytes()).records();
-    // console_log!("seq_info: {}", &records.count() );
     let mut read_count = 0;
     let mut read_block_align_vec = vec![];
-    records.into_iter().for_each(|record|{
+    records.into_iter().for_each(|record| {
         let record = record.unwrap();
         let read_block_align = ReadBlockAlign::read_block_info(&record, &block_info_vec);
         read_count += 1;
-        read_block_align_vec.push(read_block_align.get_block_str());
+        read_block_align_vec.push(read_block_align.to_pretty());
     });
     console_log!("the length of fastq record {}", read_count);
-    let read_block_align_vec_str = read_block_align_vec.join("<br/>");
-    // read_block_align.get_block_str()
-    read_block_align_vec_str
+    serde_wasm_bindgen::to_value(&read_block_align_vec).unwrap()
 }
 
 #[wasm_bindgen_test]
@@ -74,9 +69,9 @@ fn test_add_text() {
     assert_eq!(out, "aa and bb".to_string());
 }
 
-#[wasm_bindgen_test]
-// #[test]
-fn test_read_align(){
+// #[wasm_bindgen_test]
+#[test]
+fn test_read_align() {
     let seq_info = "@HISEQ_HU01:89:H7YRLADXX:1:1101:1573:2113 1:N:0:ATCACG
 ATCGATCGTAAAAA
 +
@@ -98,6 +93,27 @@ ATCGATCGTAAAAA
 >cc2
 ATCGATCGTAAAAA";
     let out = read_align(seq_info, blockinfo, fasta_info);
-    println!("{}", &out);
+    // println!("{}", &out);
     dbg!(out);
+}
+
+#[wasm_bindgen]
+pub struct FqRecord {
+    records: Vec<Record>,
+}
+
+#[wasm_bindgen]
+impl FqRecord {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seq_info: &str) -> FqRecord {
+        let records = fastq::Reader::new(seq_info.as_bytes()).records();
+        let record_vec: Vec<Record> = records.into_iter().map(|x| x.unwrap()).collect();
+        FqRecord {
+            records: record_vec,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
 }

@@ -19,7 +19,7 @@ use tracing_subscriber::fmt::format;
 use legoseq::aligner::Alignment;
 use legoseq::blockalign::ReadBlockAlign;
 use legoseq::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
-use legoseq::blockinfo::{get_block_info_fasta_from_file, BlockInfo, BLOCKFLAGS};
+use legoseq::blockinfo::{get_block_info, BlockInfo, BLOCKFLAGS};
 use legoseq::utils::get_reader;
 
 static CLI: Lazy<Cli> = Lazy::new(Cli::parse);
@@ -37,9 +37,6 @@ struct Cli {
     /// fastq file, optional
     #[arg(long, value_name = "FILE")]
     fq2: Option<String>,
-    /// fasta file
-    #[arg(long, value_name = "FILE")]
-    fasta: String,
     /// threads
     #[arg(long, value_name = "FILE")]
     threads: usize,
@@ -60,7 +57,6 @@ fn main() {
     let outdir = &CLI.outdir;
     let r1_file = &CLI.fq1;
     let r2_file = &CLI.fq2;
-    let fasta_file = &CLI.fasta;
     let block_info_file = &CLI.block_info;
     let prefix = &CLI.prefix;
     let export_blocks = &CLI.export_blocks;
@@ -79,14 +75,13 @@ fn main() {
         "write read information to file: {}",
         read_info_file.display()
     );
-    
-
-    let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
-
     let mut read_info_handle = Arc::new(Mutex::new(File::create(read_info_file).unwrap()));
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
-        writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v);
+        write!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}\n", k, v);
     });
+
+    let block_info_list = get_block_info(block_info_file);
+
     // export block
     // 命令行中指定了 --export_blocks 才会执行，同时会根据 --fq2 是否指定来导出fastq 文件
     let mut export_block_list: Option<Vec<String>> = None;

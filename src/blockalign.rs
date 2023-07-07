@@ -2,10 +2,13 @@
 use std::collections::HashMap;
 
 use bio::io::fastq::Record;
+use rayon::vec;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn, Level};
 
 use crate::aligner::Alignment;
 use crate::blockinfo::BlockInfo;
+use crate::utils::dna_to_spans;
 
 #[derive(Debug, Clone)]
 pub struct BlockAlign {
@@ -59,7 +62,8 @@ impl BlockAlign {
     }
 }
 
-// align<F: MatchFunc>(self, query: &[u8], mut aligner: Aligner<F>) ->
+/// read sequence mapping aganist the block sequence
+/// return BlockAlign vector
 pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Option<BlockAlign>> {
     // let aligner2 = &aligner;
     let mut block_align_list: Vec<Option<BlockAlign>> = vec![];
@@ -89,6 +93,7 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
 
 static OFFSET: usize = 4;
 
+/// save the fastq record and its block align information
 #[derive(Debug, Clone)]
 pub struct ReadBlockAlign {
     pub record: Record,
@@ -96,6 +101,8 @@ pub struct ReadBlockAlign {
 }
 
 impl ReadBlockAlign {
+    /// mapping read againt the block sequence
+    /// return ReadBlockAlign struct
     pub fn read_block_info(record: &Record, block_info_list: &[BlockInfo]) -> Self {
         let read_name = record.id();
         let read_seq = record.seq();
@@ -118,6 +125,7 @@ impl ReadBlockAlign {
         flag
     }
 
+    /// tostring
     pub fn get_block_str(&self) -> String {
         let mut block_str_list: Vec<String> = vec![];
         for ba in self.block_align.clone().iter() {
@@ -130,6 +138,7 @@ impl ReadBlockAlign {
         block_str_list.join(";")
     }
 
+    /// generate the new fastq record that the sequcne only include the export_block which is in the blockinfo
     pub fn get_new_record(
         &self,
         block_info_list: &[BlockInfo],
@@ -178,4 +187,35 @@ impl ReadBlockAlign {
             Record::with_attrs(record.id(), record.desc(), &new_seq_vec, &new_qual_vec);
         Some(new_record)
     }
+
+    /// tojson for wasm
+    ///
+    pub fn to_pretty(&self) -> ReadBlockAlignPretty {
+        // todo!();
+        let seq = std::str::from_utf8(self.record.seq()).unwrap();
+        let read_name = self.record.id().to_string();
+        let mut range_vec = vec![];
+        self.block_align.iter().for_each(|block_align| {
+            if let Some(block_align) = block_align {
+                let block_name = &block_align.info.idx;
+                let block_align_abbr = block_align.to_abbr();
+                if let Some(block_align_abbr) = block_align_abbr {
+                    let class_name = block_align_abbr.best_index; //.clone();
+
+                    range_vec.push((
+                        block_align_abbr.query_start..block_align_abbr.query_end,
+                        block_name.clone(),
+                    ));
+                }
+            }
+        });
+        let html = dna_to_spans(seq, &range_vec, "other");
+        ReadBlockAlignPretty { read_name, html }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadBlockAlignPretty {
+    read_name: String,
+    html: String,
 }
