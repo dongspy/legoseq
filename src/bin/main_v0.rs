@@ -52,6 +52,7 @@ struct Cli {
     export_blocks: Option<String>,
 }
 
+/// every block has a fasta file
 fn main() {
     let threads = &CLI.threads.to_owned();
     let outdir = &CLI.outdir;
@@ -182,9 +183,9 @@ fn main() {
                 }
             }
 
-            write!(
+            writeln!(
                 read_info_handle.lock().unwrap(),
-                "{}\t{}\t{}\n",
+                "{}\t{}\t{}",
                 read_name,
                 flag,
                 output_merge_str

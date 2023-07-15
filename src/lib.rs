@@ -4,3 +4,4 @@ pub mod blockinfo;
 pub mod utils;
 pub mod wapper;
 pub mod wasm;
+pub mod output;

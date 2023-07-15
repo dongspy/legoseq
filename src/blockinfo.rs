@@ -11,7 +11,6 @@ use std::fs::File;
 use std::hash::Hash;
 use std::io::{BufReader, Cursor, Read};
 use std::sync::{Arc, Mutex};
-use tempfile::{tempdir, tempfile};
 
 use crate::aligner::BAligner;
 use crate::utils::{read_fasta, write_fasta};
@@ -222,12 +221,6 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
             })
             .collect();
 
-        // let mut sub_fasta_file = NamedTempFile::new().unwrap();
-        // let dir = tempdir().unwrap();
-        // let sub_fasta_file = dir.path().join(format!("{}.sub.fa", record.idx)).into_os_string().into_string().unwrap();
-        // let sub_fasta_file = format!("{}.sub.fa", record.idx);
-        // write_fasta(&seqs, &sub_fasta_file);
-        // dbg!(&sub_fasta_file);
         let aligner = BAligner::new(record.method, &seqs, record.max_mismatch);
         let bi = BlockInfo {
             idx: record.idx.clone(),

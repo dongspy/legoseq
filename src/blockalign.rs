@@ -1,5 +1,6 @@
 #![allow(unused)]
 use std::collections::HashMap;
+use std::io::Read;
 
 use bio::io::fastq::Record;
 use rayon::vec;
@@ -138,7 +139,8 @@ impl ReadBlockAlign {
         block_str_list.join(";")
     }
 
-    /// generate the new fastq record that the sequcne only include the export_block which is in the blockinfo
+    /// generate the new fastq record that the sequcne only include the export_block 
+    /// which is in the blockinfo
     pub fn get_new_record(
         &self,
         block_info_list: &[BlockInfo],
@@ -158,6 +160,7 @@ impl ReadBlockAlign {
                 );
             });
 
+        //
         self.block_align.iter().for_each(|x| {
             if let Some(x) = x {
                 //   let ba=  x.to_abbr().unwrap();
@@ -186,6 +189,63 @@ impl ReadBlockAlign {
         let new_record =
             Record::with_attrs(record.id(), record.desc(), &new_seq_vec, &new_qual_vec);
         Some(new_record)
+    }
+
+    /// blockinfo 
+    pub fn get_seq_hashmap(
+        &self,
+        block_info_list: &[BlockInfo],
+    ) -> Option<HashMap<String, SeqOut>> {
+        let record = &self.record;
+        let seq_len = record.seq().len();
+        let mut seq_hash:HashMap<String, SeqOut> = HashMap::new();
+        // get the position of every block of new record
+        let mut block_hash = HashMap::new();
+
+        // init the block_hash
+        block_info_list
+            .iter()
+            // .filter(|&x| x.seq_type == "Fix")
+            .for_each(|x| {
+                block_hash.insert(
+                    x.idx.to_owned(),
+                    (x.query_start.unwrap_or(0), x.query_end.unwrap_or(0)),
+                );
+                // seq_hash.insert(x.idx.to_owned(), );
+            });
+
+        let mut block_align_count = 0;
+        self.block_align.iter().for_each(|x| {
+            if let Some(x) = x {
+                //   let ba=  x.to_abbr().unwrap();
+                let idx = x.info.idx.to_owned();
+                if x.align.is_some() {
+                    block_align_count += 1;
+                    let query_start = x.align.as_ref().unwrap().clone().query_start;
+                    let query_end = x.align.as_ref().unwrap().clone().query_end;
+                    block_hash.insert(idx, (query_start, query_end));
+                }
+            }
+        });
+        block_hash.iter().for_each(|(name, (start, end))|{
+            let seq = &record.seq().to_vec()[*start.min(&seq_len)..*end.min(&seq_len)];
+            let qual = &record.qual().to_vec()[*start.min(&seq_len)..*end.min(&seq_len)];
+            let seq = Some(String::from_utf8(seq.to_vec()).unwrap());
+            let qual = Some(String::from_utf8(qual.to_vec()).unwrap());
+            let seqout = SeqOut::new(name.to_string(), None, seq, qual);
+            seq_hash.insert(name.to_owned(), seqout);
+        });
+
+        // add fastq tag
+        seq_hash.insert("read".to_string(), 
+            SeqOut::new((&record.id()).to_string(), 
+            (&record.desc().map(|s| s.to_string())).to_owned(), None, None ));
+        if block_align_count > 0{
+            Some(seq_hash)
+        }else{
+            None
+        }
+        
     }
 
     /// tojson for wasm
@@ -218,4 +278,30 @@ impl ReadBlockAlign {
 pub struct ReadBlockAlignPretty {
     read_name: String,
     html: String,
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SeqOut {
+    name: String,
+    desc: String,
+    seq: String,
+    qual: String
+}
+
+pub fn to_str(s: Option<String>) -> String{
+    if let Some(s) = s{
+        s
+    }else{
+        "".to_string()
+    }
+}
+
+impl SeqOut {
+    pub fn new(name: String, desc:Option<String>, seq: Option<String>, qual: Option<String>) -> Self {
+        
+        SeqOut{
+            name, desc: to_str(desc), seq:to_str(seq), qual:to_str(qual)
+        }
+    }
 }
