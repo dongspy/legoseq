@@ -4,44 +4,6 @@ use bio::io::fastq::{self, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 
-#[wasm_bindgen]
-extern "C" {
-    // Use `js_namespace` here to bind `console.log(..)` instead of just
-    // `log(..)`
-    #[wasm_bindgen(js_namespace = console)]
-    fn log(s: &str);
-
-    // The `console.log` is quite polymorphic, so we can bind it with multiple
-    // signatures. Note that we need to use `js_name` to ensure we always call
-    // `log` in JS.
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log_u32(a: u32);
-
-    // Multiple arguments too!
-    #[wasm_bindgen(js_namespace = console, js_name = log)]
-    fn log_many(a: &str, b: &str);
-}
-
-macro_rules! console_log {
-    // Note that this is using the `log` function imported above during
-    // `bare_bones`
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
-}
-
-#[wasm_bindgen]
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-
-#[wasm_bindgen]
-pub fn test(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> String {
-    "abcd".to_string()
-}
-
-#[wasm_bindgen]
-pub fn add_text(a: &str, b: &str) -> String {
-    format!("{} and {}", a, b)
-}
 
 #[wasm_bindgen]
 pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> JsValue {
@@ -62,12 +24,6 @@ pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> JsVa
     serde_wasm_bindgen::to_value(&read_block_align_vec).unwrap()
 }
 
-#[wasm_bindgen_test]
-fn test_add_text() {
-    // assert_eq!(1, 1);
-    let out = add_text("aa", "bb");
-    assert_eq!(out, "aa and bb".to_string());
-}
 
 // #[wasm_bindgen_test]
 #[test]

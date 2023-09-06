@@ -135,7 +135,7 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
 #[derive(Debug, Clone, Default, Deserialize)]
 struct BlockInfoFileWithoutFasta {
     idx: String,
-    seq_type: String,
+    seq_type: String, // Fix/Anchor/Barcode
     fasta_seq_id: Option<String>,
     max_mismatch: usize,
     query_start: Option<usize>,
@@ -186,6 +186,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
         let record: BlockInfoFileWithoutFasta = result.unwrap();
 
         if &record.seq_type == "Fix" {
+            // 针对固定序列的处理
             let bi = BlockInfo {
                 idx: record.idx.clone(),
                 seq_type: record.seq_type,
