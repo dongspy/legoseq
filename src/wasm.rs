@@ -4,7 +4,6 @@ use bio::io::fastq::{self, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 
-
 #[wasm_bindgen]
 pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> JsValue {
     // let seq_info: Vec<&str> = seq_info.split('|').collect();
@@ -23,7 +22,6 @@ pub fn read_align(seq_info: &str, blockinfo_str: &str, fasta_file: &str) -> JsVa
     console_log!("the length of fastq record {}", read_count);
     serde_wasm_bindgen::to_value(&read_block_align_vec).unwrap()
 }
-
 
 // #[wasm_bindgen_test]
 #[test]

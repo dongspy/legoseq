@@ -19,7 +19,15 @@ pub struct BlockAlign {
     pub best_index: String,
 }
 
-impl BlockAlign{
+impl BlockAlign {
+    pub fn new(info: &BlockInfo, align: &Alignment) -> BlockAlign{
+        BlockAlign{
+            info: info.clone(),
+            align: Some(align.clone()),
+            n_match: align.n_match,
+            best_index: align.best_index.clone(),
+        }
+    }
 
     pub fn get_query_start(&self) -> Option<usize> {
         self.align.as_ref().map(|align| align.query_start)
@@ -28,8 +36,22 @@ impl BlockAlign{
     pub fn get_query_end(&self) -> Option<usize> {
         self.align.as_ref().map(|align| align.query_end)
     }
-}
 
+    pub fn to_abbr(&self) -> Option<BlockAlignAbbr> {
+        // let mut hash = HashMap::new();
+        self.align.as_ref().map(|aln| BlockAlignAbbr {
+            best_index: self.best_index.to_owned(),
+            index_start: aln.index_start,
+            index_end: aln.index_end,
+            query_start: aln.query_start,
+            query_end: aln.query_end,
+            n_match: self.n_match,
+            strand: aln.strand,
+            // flag: aln.flag
+            flag: self.info.flag,
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BlockAlignAbbr {
@@ -55,23 +77,6 @@ impl BlockAlignAbbr {
             self.n_match,
             self.strand
         )
-    }
-}
-
-impl BlockAlign {
-    pub fn to_abbr(&self) -> Option<BlockAlignAbbr> {
-        // let mut hash = HashMap::new();
-        self.align.as_ref().map(|aln| BlockAlignAbbr {
-            best_index: self.best_index.to_owned(),
-            index_start: aln.index_start,
-            index_end: aln.index_end,
-            query_start: aln.query_start,
-            query_end: aln.query_end,
-            n_match: self.n_match,
-            strand: aln.strand,
-            // flag: aln.flag
-            flag: self.info.flag,
-        })
     }
 }
 
@@ -104,6 +109,7 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
     block_align_list
 }
 
+/// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
 pub fn block_align_read_with_insert(
     read: &[u8],
     block_info_list: &[BlockInfo],
@@ -113,25 +119,12 @@ pub fn block_align_read_with_insert(
     let mut pre_query_end: usize = 0;
     let read_len = read.len();
 
+    // 处理 anchor/fix 序列
     for block_info in block_info_list.iter().filter(|x| x.seq_type != "Fix") {
         let mut block_info = block_info.clone();
-        let idx = (&block_info.idx).clone();
-        // block_info.query_start = Some(pre_query_end.saturating_sub(OFFSET));
-        // let ba = block_info.clone().align(read, aligner);
-        let align = block_info.aligner.clone().unwrap().align(read);
-        let ba = if let Some(align) = align {
-            let ba = BlockAlign {
-                info: block_info.clone(),
-                align: Some(align.clone()),
-                n_match: align.clone().n_match,
-                best_index: align.best_index,
-            };
-            // ba.to_abbr()
-            Some(ba)
-        } else {
-            None
-        };
-        // block_align_list.push(ba);
+        let idx = block_info.idx.clone();
+        let align: Option<Alignment> = block_info.aligner.clone().and_then(|x| x.align(read));
+        let ba = align.map(|x| BlockAlign::new(&block_info, &x));
         block_align_hash.insert(idx, ba);
     }
 
@@ -139,7 +132,7 @@ pub fn block_align_read_with_insert(
     let block_info_len = block_info_list.len();
     for block_ii in 0..block_info_len {
         let mut block_info = block_info_list[block_ii].clone();
-        let idx = (&block_info.idx).to_string();
+        let idx = block_info.idx.to_string();
         if block_info.seq_type != "Variable" {
             continue;
         }
@@ -150,9 +143,12 @@ pub fn block_align_read_with_insert(
             query_start = Some(0);
         } else {
             let pre_block_info = &block_info_list[block_ii - 1];
-            let ba = block_align_hash.get(&pre_block_info.idx).unwrap().clone().unwrap();
+            let ba = block_align_hash
+                .get(&pre_block_info.idx)
+                .unwrap()
+                .clone()
+                .unwrap();
             query_start = ba.get_query_end().map(|pos| pos + 1);
-
         }
 
         // 末尾模块
@@ -161,18 +157,22 @@ pub fn block_align_read_with_insert(
             query_end = Some(read_len);
         }
         let next_block_info = &block_info_list[block_ii + 1];
-        let ba = block_align_hash.get(&next_block_info.idx).unwrap().clone().unwrap();
+        let ba = block_align_hash
+            .get(&next_block_info.idx)
+            .unwrap()
+            .clone()
+            .unwrap();
         query_end = ba.get_query_start().map(|pos| pos - 1);
-        
-        let align = Alignment{
+        // let 
+        let align = Alignment {
             best_index: "".to_string(),
             index_start: 0,
             index_end: 0,
-            query_start: query_start.unwrap() ,
+            query_start: query_start.unwrap(),
             query_end: query_end.unwrap(),
             n_match: 0,
             strand: '+',
-            operations: ba.clone().align.unwrap().operations,
+            operations: None,
             // operations: vec![AlignmentOperation::]
         };
 
@@ -531,8 +531,8 @@ ATCGATCGTACAAA";
     let blockinfo_vec = get_block_info_fasta(blockinfo_str, fasta_file).unwrap();
     let read = b"CTCGATCGATCGTAAAAACGCCTCGCTATATCGTATCGATCGTACAAA";
     let block_align = block_align_read_with_insert(read, &blockinfo_vec);
-    
-    for (k, v) in block_align{
+
+    for (k, v) in block_align {
         // println!("{k}");
         println!("{k}: {}", v.unwrap().to_abbr().unwrap().to_str());
     }

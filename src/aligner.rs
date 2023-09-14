@@ -50,7 +50,7 @@ pub struct Alignment {
     pub query_end: usize,
     pub n_match: usize,
     pub strand: char,
-    pub operations: Vec<AlignmentOperation>,
+    pub operations: Option<Vec<AlignmentOperation>>,
 }
 
 impl Alignment {
@@ -100,7 +100,7 @@ impl Align for AntAligner {
                 query_end: align.gx_aln.xend,
                 n_match,
                 strand: if align.strand { '+' } else { '-' },
-                operations: gx_aln.operations,
+                operations: Some(gx_aln.operations),
             })
         } else {
             None
@@ -130,7 +130,7 @@ impl Align for BandedAligner {
                 query_end: aln.yend,
                 n_match: forward_n_match,
                 strand: '+',
-                operations: aln.operations,
+                operations: Some(aln.operations),
             });
         }
         let seq = revcomp(seq);
@@ -158,7 +158,7 @@ impl Align for BandedAligner {
                 query_end: aln.yend,
                 n_match,
                 strand,
-                operations: aln.operations,
+                operations: Some(aln.operations),
             })
         }
     }

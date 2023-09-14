@@ -6,17 +6,17 @@ use bio::io::fastq::{self, Record};
 use clap::command;
 use clap::Parser;
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use minijinja::{context, value::Value, Environment, Template};
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::fs;
 use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt::format;
-use minijinja::{Environment, context, Template, value::Value};
 
 use legoseq::aligner::Alignment;
 use legoseq::blockalign::ReadBlockAlign;
@@ -81,7 +81,6 @@ fn main() {
         "write read information to file: {}",
         read_info_file.display()
     );
-    
 
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
 
@@ -96,14 +95,13 @@ fn main() {
     let mut out_fq2 = None;
 
     //minijinja
-    let template_string = fs::read_to_string("./test/template.txt")
-        .expect("无法读取模板文件");
+    let template_string = fs::read_to_string("./test/template.txt").expect("无法读取模板文件");
     // 创建一个新的 MiniJinja 环境
     let env = Environment::new();
     // 从字符串创建一个模板
-    let template = env.template_from_str(&template_string)
+    let template = env
+        .template_from_str(&template_string)
         .expect("无法从字符串创建模板");
-
 
     if let Some(export_blocks) = export_blocks {
         export_block_list = Some(export_blocks.split('-').map(|x| x.to_string()).collect());
@@ -172,17 +170,14 @@ fn main() {
             let flag = read_block_align.get_block_flag();
             *flag_stat_hash.lock().unwrap().entry(flag).or_insert(0) += 1;
             let output_merge_str = read_block_align.get_block_str();
-            
+
             let seq_hash = read_block_align.get_seq_hashmap(&block_info_list);
             if let Some(seq_hash) = seq_hash {
                 let ctx = Value::from_serializable(&seq_hash);
-                let output_seq = template.render(
-                    ctx
-                ).expect("无法渲染模板");
+                let output_seq = template.render(ctx).expect("无法渲染模板");
                 dbg!(output_seq);
             }
-                
-            
+
             if let Some(export_block_list) = &export_block_list {
                 let new_record =
                     read_block_align.get_new_record(&block_info_list, export_block_list);

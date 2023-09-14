@@ -4,13 +4,13 @@ use bio::io::fasta;
 use csv::{ReaderBuilder, StringRecord};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
-use tracing::info;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::hash::Hash;
 use std::io::{BufReader, Cursor, Read};
 use std::sync::{Arc, Mutex};
+use tracing::info;
 
 use crate::aligner::BAligner;
 use crate::utils::{read_fasta, write_fasta};
