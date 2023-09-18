@@ -10,8 +10,8 @@ use bio::io::fasta;
 use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
 
-use crate::blockalign::{block_align_read, ReadBlockAlign};
 use crate::blockinfo::BlockInfo;
+use crate::readblockalign::{block_align_read, ReadBlockAlign};
 
 // fastq reader, file as arg, decide based on extension
 pub fn get_reader(path: &str) -> Box<dyn Read + Send> {

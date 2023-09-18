@@ -19,9 +19,9 @@ use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt::format;
 
 use legoseq::aligner::Alignment;
-use legoseq::blockalign::ReadBlockAlign;
-use legoseq::blockalign::{block_align_read, BlockAlign, BlockAlignAbbr};
+use legoseq::blockalign::{BlockAlign, BlockAlignAbbr};
 use legoseq::blockinfo::{get_block_info_fasta_from_file, BlockInfo, BLOCKFLAGS};
+use legoseq::readblockalign::ReadBlockAlign;
 use legoseq::utils::get_reader;
 
 static CLI: Lazy<Cli> = Lazy::new(Cli::parse);
@@ -52,6 +52,10 @@ struct Cli {
     #[arg(long, value_name = "PATH")]
     prefix: String,
 
+    /// the template file
+    #[arg(long, value_name = "PATH")]
+    template: Option<String>,
+
     /// export block
     #[arg(long, value_name = "String")]
     export_blocks: Option<String>,
@@ -66,6 +70,7 @@ fn main() {
     let block_info_file = &CLI.block_info;
     let prefix = &CLI.prefix;
     let export_blocks = &CLI.export_blocks;
+    let template: &Option<String> = &CLI.template;
     tracing_subscriber::fmt::init();
     info!("Start");
 
@@ -77,14 +82,21 @@ fn main() {
     // output read info  statistics
     let outdir = Path::new(outdir);
     let read_info_file = outdir.join(format!("{}.{}", prefix, "read_info.stat.tsv"));
+    let out_fq_file = outdir.join(format!("{}.{}", prefix, "template.out.fastq"));
     info!(
         "write read information to file: {}",
         read_info_file.display()
+    );
+    info!(
+        "write read information to file: {}",
+        out_fq_file.display()
     );
 
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
 
     let mut read_info_handle = Arc::new(Mutex::new(File::create(read_info_file).unwrap()));
+    let mut out_fq_handle = Arc::new(Mutex::new(File::create(out_fq_file).unwrap()));
+
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
         writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v);
     });
@@ -95,7 +107,7 @@ fn main() {
     let mut out_fq2 = None;
 
     //minijinja
-    let template_string = fs::read_to_string("./test/template.txt").expect("无法读取模板文件");
+    let template_string = fs::read_to_string(template.clone().unwrap()).expect("无法读取模板文件");
     // 创建一个新的 MiniJinja 环境
     let env = Environment::new();
     // 从字符串创建一个模板
@@ -120,9 +132,7 @@ fn main() {
     } else {
         // None
     };
-    // let export_block_list: Option<Vec<String>> = export_blocks
-    //     .as_ref()
-    //     .map(|export_blocks| export_blocks.split('-').map(|x| x.to_string()).collect());
+
     // 统计所有 flag 的数目
     let flag_stat_hash: Arc<Mutex<HashMap<usize, usize>>> = Arc::new(Mutex::new(HashMap::new()));
 
@@ -175,7 +185,8 @@ fn main() {
             if let Some(seq_hash) = seq_hash {
                 let ctx = Value::from_serializable(&seq_hash);
                 let output_seq = template.render(ctx).expect("无法渲染模板");
-                dbg!(output_seq);
+                // dbg!(output_seq);
+                writeln!(out_fq_handle.lock().unwrap(), "{}", output_seq);
             }
 
             if let Some(export_block_list) = &export_block_list {

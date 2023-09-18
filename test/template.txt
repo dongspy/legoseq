@@ -1,2 +1,4 @@
 >{{ read.name}} {{ aa.name}} {{bb.name}} {{cc.name}}
+{{ aa.qual }}
++
 {{ aa.seq}}

@@ -1,5 +1,5 @@
-use crate::blockalign::ReadBlockAlign;
 use crate::blockinfo::get_block_info_fasta;
+use crate::readblockalign::ReadBlockAlign;
 use bio::io::fastq::{self, Record};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
