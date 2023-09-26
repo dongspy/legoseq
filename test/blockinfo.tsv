@@ -1,4 +1,0 @@
-idx	seq_type	fasta_seq_id	max_mismatch	query_start	query_end	seq_len	method
-aa	Fix	aa1,aa2	2				ANT
-bb	Variable	bb1,bb2	2				ANT
-cc	Fix	cc1,cc2	2				ANT

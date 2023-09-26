@@ -185,7 +185,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
     for result in rdr.deserialize() {
         let record: BlockInfoFileWithoutFasta = result.unwrap();
 
-        if &record.seq_type == "Fix" {
+        if &record.seq_type != "Fix" {
             // 针对固定序列的处理
             let bi = BlockInfo {
                 idx: record.idx.clone(),

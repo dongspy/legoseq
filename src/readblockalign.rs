@@ -1,14 +1,42 @@
 use std::collections::HashMap;
-use std::ops::Deref;
 
 use bio::io::fastq::Record;
 use bio_types::sequence::SequenceRead;
+use minijinja::value::Value;
+use minijinja::Template;
 use serde::{Deserialize, Serialize};
 
 use crate::aligner::Alignment;
+use crate::blockalign;
 use crate::blockinfo::get_block_info_fasta;
-use crate::utils::dna_to_spans;
+use crate::utils::Strand;
+use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
+
+/// save the fastq record and its block align information
+#[derive(Debug, Clone)]
+pub struct ReadBlockAlign {
+    pub block_idx_list: Vec<String>,
+    pub record: Record,
+    pub block_align: HashMap<String, Option<BlockAlign>>, // blockname: block_align
+    strand: Strand,
+}
+
+impl ReadBlockAlign {
+    pub fn new(
+        block_idx_list: &[String],
+        record: &Record,
+        block_align: &HashMap<String, Option<BlockAlign>>,
+        strand: Strand,
+    ) -> Self {
+        ReadBlockAlign {
+            block_idx_list: block_idx_list.to_vec(),
+            record: record.clone(),
+            block_align: block_align.clone(),
+            strand: strand.clone(),
+        }
+    }
+}
 
 /// read sequence mapping aganist the block sequence
 /// return BlockAlign vector
@@ -39,111 +67,134 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
     block_align_list
 }
 
-/// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
-pub fn block_align_read_with_insert(
-    read: &[u8],
-    block_info_list: &[BlockInfo],
-) -> HashMap<String, Option<BlockAlign>> {
-    // let aligner2 = &aligner;
-    let mut block_align_hash: HashMap<String, Option<BlockAlign>> = HashMap::new();
-    let mut pre_query_end: usize = 0;
-    let read_len = read.len();
-
-    // 处理 anchor/fix 序列
-    for block_info in block_info_list.iter().filter(|x| x.seq_type != "Fix") {
-        let mut block_info = block_info.clone();
-        let idx = block_info.idx.clone();
-        let align: Option<Alignment> = block_info.aligner.clone().and_then(|x| x.align(read));
-        let ba = align.map(|x| BlockAlign::new(&block_info, &x));
-        block_align_hash.insert(idx, ba);
-    }
-
-    // 处理可变序列
-    let block_info_len = block_info_list.len();
-    for block_ii in 0..block_info_len {
-        let mut block_info = block_info_list[block_ii].clone();
-        let idx = block_info.idx.to_string();
-        if block_info.seq_type != "Variable" {
-            continue;
-        }
-
-        let mut query_start: Option<usize> = None;
-        // 开头模块
-        if block_ii == 0 {
-            query_start = Some(0);
-        } else {
-            let pre_block_info = &block_info_list[block_ii - 1];
-            let ba = block_align_hash.get(&pre_block_info.idx).unwrap().clone();
-            if let Some(ba) = ba {
-                query_start = ba.get_query_end().map(|pos| pos + 1);
-            } else {
-                block_align_hash.insert(idx, None);
-                continue;
-            }
-        }
-
-        // 末尾模块
-        let mut query_end: Option<usize> = None;
-        if block_ii == (block_info_len - 1) {
-            query_end = Some(read_len);
-        }
-        let next_block_info = &block_info_list[block_ii + 1];
-        let ba = block_align_hash.get(&next_block_info.idx).unwrap().clone();
-
-        if let Some(ba) = ba {
-            // query_start = ba.get_query_end().map(|pos| pos + 1);
-            query_end = ba.get_query_start().map(|pos| pos - 1);
-        } else {
-            block_align_hash.insert(idx, None);
-            continue;
-        }
-        // let
-        let align = Alignment {
-            best_index: "".to_string(),
-            index_start: 0,
-            index_end: 0,
-            query_start: query_start.unwrap(),
-            query_end: query_end.unwrap(),
-            n_match: 0,
-            strand: '+',
-            operations: None,
-            // operations: vec![AlignmentOperation::]
-        };
-
-        let ba = BlockAlign {
-            info: block_info.clone(),
-            align: Some(align),
-            n_match: 0,
-            best_index: "".to_string(),
-        };
-
-        block_align_hash.insert(idx, Some(ba));
-    }
-    block_align_hash
-}
-
-/// save the fastq record and its block align information
-#[derive(Debug, Clone)]
-pub struct ReadBlockAlign {
-    pub block_idx_list: Vec<String>,
-    pub record: Record,
-    pub block_align: HashMap<String, Option<BlockAlign>>, // blockname: block_align
-}
 
 impl ReadBlockAlign {
     /// mapping read againt the block sequence
     /// return ReadBlockAlign struct
+    // pub fn read_block_info(record: &Record, block_info_list: &[BlockInfo]) -> Self {
+    //     let read_name = record.id();
+    //     let read_seq = record.seq();
+    //     let block_align = block_align_read_with_insert(&record, block_info_list);
+    //     let block_idx_list: Vec<String> =
+    //         block_info_list.iter().map(|x| x.idx.to_string()).collect();
+
+    //     Self {
+    //         record: record.clone(),
+    //         block_align,
+    //         block_idx_list,
+    //     }
+    // }
+
+    /// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
     pub fn read_block_info(record: &Record, block_info_list: &[BlockInfo]) -> Self {
-        let read_name = record.id();
-        let read_seq = record.seq();
-        let block_align = block_align_read_with_insert(read_seq, block_info_list);
+        let read = record.seq();
+        // let aligner2 = &aligner;
+        let mut block_align_hash: HashMap<String, Option<BlockAlign>> = HashMap::new();
+        let mut pre_query_end: usize = 0;
+        let read_len = read.len();
+
+        let mut strand_vec: Vec<Strand> = vec![];
+        // 处理 anchor/fix 序列
+        for block_info in block_info_list.iter().filter(|x| x.seq_type == "Fix") {
+            let block_info = block_info.clone();
+            let idx = block_info.idx.clone();
+            let align: Option<Alignment> = block_info.aligner.clone().and_then(|x| x.align(read));
+            let ba = align.map(|x| BlockAlign::new(&block_info, &x));
+            block_align_hash.insert(idx, ba.clone());
+            if let Some(ba) = ba {
+                strand_vec.push(ba.get_query_strand().unwrap());
+            } else {
+                strand_vec.push(Strand::Ambiguous);
+            }
+        }
+        // 判断正负链
+        let strand_vec_equal = check_vec_equal(&strand_vec);
+        let strand = if strand_vec_equal {
+            strand_vec.first().unwrap_or(&Strand::Ambiguous)
+        } else {
+            &Strand::Ambiguous
+        };
+
+        // 处理可变序列
+        let block_info_len = block_info_list.len();
+        for block_ii in 0..block_info_len {
+            let mut block_info = block_info_list[block_ii].clone();
+            let idx = block_info.idx.to_string();
+            if block_info.seq_type != "Variable" {
+                continue;
+            }
+
+            let mut query_start: Option<usize> = None;
+            // 开头模块
+            if block_ii == 0 {
+                // query_start = Some(0);
+                query_start = if strand.is_reverse().unwrap(){ Some(read_len)} else {Some(0)};
+            } else {
+                let pre_block_info = &block_info_list[block_ii - 1];
+                let ba = block_align_hash.get(&pre_block_info.idx).unwrap();
+                if let Some(ba) = ba {
+                    query_start = ba.get_query_end().map(|pos| pos + 1);
+                } else {
+                    block_align_hash.insert(idx, None);
+                    continue;
+                }
+            }
+
+            // 末尾模块
+            let mut query_end: Option<usize> = None;
+            if block_ii == (block_info_len - 1) {
+                // query_end = Some(read_len);
+                query_end = if strand.is_reverse().unwrap(){ Some(0)} else {Some(read_len)};
+            }
+            let next_block_info = &block_info_list[block_ii + 1];
+            let ba = block_align_hash.get(&next_block_info.idx).unwrap().clone();
+
+            if let Some(ba) = ba {
+                // query_start = ba.get_query_end().map(|pos| pos + 1);
+                query_end = ba.get_query_start().map(|pos| pos - 1);
+            } else {
+                block_align_hash.insert(idx, None);
+                continue;
+            }
+            if strand.is_reverse().unwrap(){
+                (query_start, query_end) = (query_end, query_start);
+            }
+            // 存在异常
+            // if query_start > query_end {
+            //     block_align_hash.insert(idx, None);
+            //     continue;
+            // }
+            // let
+            let align = Alignment {
+                best_index: "".to_string(),
+                index_start: 0,
+                index_end: 0,
+                query_start: query_start.unwrap(),
+                query_end: query_end.unwrap(),
+                n_match: 0,
+                strand: strand.clone(),
+                operations: None,
+                // operations: vec![AlignmentOperation::]
+            };
+
+            let ba = BlockAlign {
+                info: block_info.clone(),
+                align: Some(align),
+                n_match: 0,
+                best_index: "".to_string(),
+            };
+
+            block_align_hash.insert(idx, Some(ba));
+        }
+
         let block_idx_list: Vec<String> =
             block_info_list.iter().map(|x| x.idx.to_string()).collect();
 
         Self {
             record: record.clone(),
-            block_align,
+            block_align: block_align_hash,
             block_idx_list,
+            strand: strand.clone(),
         }
     }
 
@@ -239,14 +290,13 @@ impl ReadBlockAlign {
 
     /// blockinfo
     /// 基于 readblockalign 生成 hashmap 用于对应模版
-    pub fn get_seq_hashmap(
-        &self,
-        block_info_list: &[BlockInfo],
-    ) -> Option<HashMap<String, SeqOut>> {
+    pub fn get_seq_hashmap(&self) -> Option<HashMap<String, JinjaSeq>> {
+        if self.strand == Strand::Ambiguous {
+            return None;
+        }
         let record = &self.record;
-        let seq_len = record.seq().len();
-        let mut seq_hash: HashMap<String, SeqOut> = HashMap::new();
-
+        let mut seq_hash: HashMap<String, JinjaSeq> = HashMap::new();
+        let read_name = String::from_utf8(self.record.name().to_vec()).unwrap_or("".to_string());
         // todo:
         let mut block_align_count = 0;
         self.block_align
@@ -255,23 +305,32 @@ impl ReadBlockAlign {
                 if let Some(block_align) = block_align {
                     //   let ba=  x.to_abbr().unwrap();
                     let idx = block_align.info.idx.to_owned();
+                    let best_index = &block_align.best_index;
                     if block_align.align.is_some() {
                         block_align_count += 1;
 
                         let query_start = block_align.get_query_start().unwrap_or(0);
                         let query_end = block_align.get_query_end().unwrap_or(0);
-                        let seqout = SeqOut::new(&idx, record, query_start, query_end);
+                        let strand = block_align.get_query_strand().unwrap();
+                        // if query_end < query_start {
+                        //     // dbg!(&block_align);
+                        //     // dbg!(self.record.id());
+                        //     return None
+                        // }
+                        // 如果 variable 两端的 fix 是颠倒的，会有混乱，需要修改
+                        let seqout =
+                            JinjaSeq::new(best_index, record, query_start, query_end, &strand);
                         seq_hash.insert(idx, seqout);
                     }
                 } else {
                     // dbg!(format!("not found {block_name}"));
-                    seq_hash.insert(block_name.to_string(), SeqOut::default());
+                    seq_hash.insert(block_name.to_string(), JinjaSeq::default());
                 }
             });
         // add fastq tag
         seq_hash.insert(
             "read".to_string(),
-            SeqOut {
+            JinjaSeq {
                 name: String::from_utf8(self.record.name().to_vec()).unwrap_or("".to_string()),
                 ..Default::default()
             },
@@ -281,6 +340,19 @@ impl ReadBlockAlign {
         } else {
             None
         }
+    }
+
+    pub fn template_str(
+        &self,
+        template: &Template<'_, '_>,
+        block_info_list: &[BlockInfo],
+    ) -> Option<String> {
+        let seq_hash = self.get_seq_hashmap();
+        let out = seq_hash.as_ref().map(|x| {
+            let ctx = Value::from_serializable(x);
+            template.render(ctx).expect("无法渲染模板")
+        });
+        out
     }
 
     /// tojson for wasm
@@ -316,11 +388,14 @@ pub struct ReadBlockAlignPretty {
 }
 
 #[derive(Debug, Deserialize, Serialize, Default)]
-pub struct SeqOut {
+pub struct JinjaSeq {
     name: String,
     desc: String,
     seq: String,
     qual: String,
+    start: usize,
+    end: usize,
+    strand: char,
 }
 
 pub fn to_str(s: Option<String>) -> String {
@@ -331,34 +406,33 @@ pub fn to_str(s: Option<String>) -> String {
     }
 }
 
-impl SeqOut {
-    // pub fn new(
-    //     name: String,
-    //     desc: Option<String>,
-    //     seq: Option<String>,
-    //     qual: Option<String>,
-    // ) -> Self {
-    //     SeqOut {
-    //         name,
-    //         desc: to_str(desc),
-    //         seq: to_str(seq),
-    //         qual: to_str(qual),
-    //     }
-    // }
-
-    pub fn new(name: &str, record: &Record, start: usize, end: usize) -> Self {
+impl JinjaSeq {
+    pub fn new(name: &str, record: &Record, start: usize, end: usize, strand: &Strand) -> Self {
+        let mut new_end = end;
+        let mut new_start = start;
+        // if strand.is_reverse().is_some(){
+        //     new_end = start;
+        //     new_start = end;
+        // }else{
+        //     new_end = end;
+        //     new_start = start;
+        // }
+        
         let seq_len = record.seq().len();
-        let seq = &record.seq().to_vec()[start.min(seq_len)..end.min(seq_len)];
-        let qual = &record.qual().to_vec()[start.min(seq_len)..end.min(seq_len)];
-        // let desc = &record.desc();
+        let seq = &record.seq().to_vec()[new_start.min(seq_len)..new_end.min(seq_len)];
+        let qual = &record.qual().to_vec()[new_start.min(seq_len)..new_end.min(seq_len)];
+        let desc = &record.desc();
         let seq = Some(String::from_utf8(seq.to_vec()).unwrap());
         let qual = Some(String::from_utf8(qual.to_vec()).unwrap());
         // let seqout = SeqOut::new(name.to_string(), None, seq, qual);
-        SeqOut {
+        JinjaSeq {
             name: name.to_string(),
-            desc: "".to_string(),
+            desc: to_str(desc.map(|x| x.to_string())),
             seq: to_str(seq),
             qual: to_str(qual),
+            start,
+            end,
+            strand: strand.to_char(),
         }
     }
 }
@@ -366,9 +440,9 @@ impl SeqOut {
 #[test]
 fn test_block_align_read_with_insert() {
     let blockinfo_str = "idx	seq_type	fasta_seq_id	max_mismatch	query_start	query_end	seq_len	method
-aa	Anchor	aa1,aa2	2				ANT
+aa	Fix	aa1,aa2	2				ANT
 bb	Variable	bb1,bb2	2				ANT
-cc	Anchor	cc1,cc2	2				ANT";
+cc	Fix	cc1,cc2	2				ANT";
     // println!("{}", blockinfo_str);
     let fasta_file = ">aa1
 AAAAAAAAAAAAA
@@ -384,14 +458,17 @@ ATCGATCTTAAAAA
 CCCCCCCCCCCCC";
     let blockinfo_vec = get_block_info_fasta(blockinfo_str, fasta_file).unwrap();
     let read =
-        b"AAAAAAAAAAAAACTCGATCGATCGTAAAAACGCTTTTTTTTTTTTTTCTCGCTATATCGTATCGATCCCCCCCCCCCCCCGTACAAA";
-    let block_align = block_align_read_with_insert(read, &blockinfo_vec);
-
+        b"CTGGGGGGGGGGGGGGCGATCGATCGTAAACCCCCCCCCCCCCCAACGCTTTTTTTTTTTTTTCTCGCTATATCGTATCGATGTAC";
+    let record = Record::with_attrs("read01_rev", None, read, read);
+    let read_block_align = ReadBlockAlign::read_block_info(&record, &blockinfo_vec);
+    let block_align = &read_block_align.block_align;
     for (k, v) in block_align {
-        // println!("{k}");
+        println!("{k}");
         if let Some(v) = v {
             println!("{k}: {}", v.to_abbr().unwrap().to_str());
         }
     }
+    let seq_hashmap = read_block_align.get_seq_hashmap().unwrap();
+    dbg!(seq_hashmap);
     // dbg!(block_align);
 }

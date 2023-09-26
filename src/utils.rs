@@ -1,4 +1,6 @@
+use core::fmt;
 use std::collections::HashMap;
+use std::default;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
 use std::ops::Range;
@@ -9,11 +11,68 @@ use bio::alphabets::dna::complement;
 use bio::io::fasta;
 use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
+use serde::Serialize;
 
 use crate::blockinfo::BlockInfo;
 use crate::readblockalign::{block_align_read, ReadBlockAlign};
 
-// fastq reader, file as arg, decide based on extension
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+pub enum Strand {
+    Plus,
+    Minus,
+    #[default]
+    Ambiguous,
+}
+
+// impl Default for Strand {
+//     fn default() -> Self {
+//         Strand::Ambiguous
+//     }
+// }
+
+impl fmt::Display for Strand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Strand::Plus => '+',
+                Strand::Minus => '-',
+                Strand::Ambiguous => '.',
+            }
+        )
+    }
+}
+
+impl Strand {
+    pub fn to_char(&self) -> char {
+        match self {
+            Strand::Plus => '+',
+            Strand::Minus => '-',
+            Strand::Ambiguous => '.',
+        }
+    }
+
+    pub fn is_reverse(&self) -> Option<bool> {
+        match self {
+            Strand::Plus => Some(false),
+            Strand::Minus => Some(true),
+            Strand::Ambiguous => None,
+        }
+    }
+}
+
+/// check if all the value in the vector is equal.
+pub fn check_vec_equal<T: PartialEq>(vec: &[T]) -> bool {
+    match vec.first() {
+        None => true, // empty vec
+        Some(first) => vec.iter().all(|item| item == first),
+    }
+}
+
+/// get the up
+
+/// fastq reader, file as arg, decide based on extension
 pub fn get_reader(path: &str) -> Box<dyn Read + Send> {
     if path.ends_with(".gz") {
         let f = File::open(path).unwrap();

@@ -1,5 +1,8 @@
 #![allow(unused)]
-use crate::blockinfo::{AlignMethod, BlockInfo};
+use crate::{
+    blockinfo::{AlignMethod, BlockInfo},
+    utils::Strand,
+};
 use antlib::{
     align::{align_read as ant_align, AlignOpts as AntAlignOpts},
     index::Index as AntIndex,
@@ -49,14 +52,14 @@ pub struct Alignment {
     pub query_start: usize,
     pub query_end: usize,
     pub n_match: usize,
-    pub strand: char,
+    pub strand: Strand,
     pub operations: Option<Vec<AlignmentOperation>>,
 }
 
 impl Alignment {
     pub fn to_str(&self) -> String {
         format!(
-            "{}:{}:{}:{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}:{}:{:#?}",
             self.best_index,
             self.index_start,
             self.index_end,
@@ -99,7 +102,11 @@ impl Align for AntAligner {
                 query_start: align.gx_aln.xstart,
                 query_end: align.gx_aln.xend,
                 n_match,
-                strand: if align.strand { '+' } else { '-' },
+                strand: if align.strand {
+                    Strand::Plus
+                } else {
+                    Strand::Minus
+                },
                 operations: Some(gx_aln.operations),
             })
         } else {
@@ -129,7 +136,7 @@ impl Align for BandedAligner {
                 query_start: aln.ystart,
                 query_end: aln.yend,
                 n_match: forward_n_match,
-                strand: '+',
+                strand: Strand::Plus,
                 operations: Some(aln.operations),
             });
         }
@@ -142,9 +149,9 @@ impl Align for BandedAligner {
             .count();
 
         let (aln, n_match, strand) = if (revcom_n_match > forward_n_match) {
-            (revcom_aln, revcom_n_match, '-')
+            (revcom_aln, revcom_n_match, Strand::Minus)
         } else {
-            (forward_aln, forward_n_match, '+')
+            (forward_aln, forward_n_match, Strand::Plus)
         };
 
         if (seq_len - n_match) > self.max_mismatch {
@@ -233,12 +240,11 @@ impl BAligner {
 fn test_baligner() {
     use std::time::{Duration, Instant};
     let now = Instant::now();
-    let seq_hash = read_fasta("/Users/pidong/tmp/ont_p5.index.fa").expect("read fasta error");
+    let seq_hash = read_fasta("test/test.fasta").expect("read fasta error");
     let alingner = BAligner::new(AlignMethod::ANT, &seq_hash, 5);
     // aligner
     // let aligner = get_aligner(AlignMethod::ANT, "test/index.fa");
-    let read =
-        b"AATGTCTATGTACATACTTGACTGGTTTCATCTGCTAATGATTGCAGCAACCACAAGATCTACACCACAAAGACACCAACAACTACTTCACTCTTTCCCTACACAAGCACTTCTTAAGATGTGTGAGTACAGGTTTCATCAATAATCATTTCTTATATGAGTGCCTCATTACATGCAGTATTTATACTAAGCATTTACCATCTTAGCTTCTATCAAAATTATGGTATATCACTCACACCTCATGTCCTCCCCTTTACTATGCCTGAAGGAATAATACTATCAGTGTTCCCATTATAGCTACTCTCATGACCCTAGACACCCACTTTTCCCTCTTAGCCAATATTGTGCCTATTCCCATTACTAAGTCTTTTGCACACTAGAAAGCAGCAGTTGGCCTACCCTCTAGTCTCAATCTTCCAACACATGGCCTCGACAGATGAGAAAGAGCACACATCTGAACTTCCAGTTCACATATTTTCATCAGAATGAATCCTTGTCTCGTATGCCATTCTTCTTGCAGCCAATCATC";
+    let read = b"CACAAAGACAAAAAAAAAAAACCAACAACTACTT";
     // let read = b"CACAAAGACACCAACAACTACTT";
     let aln = alingner.align(read);
     // for _ in 0..10000{

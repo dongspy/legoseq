@@ -87,15 +87,12 @@ fn main() {
         "write read information to file: {}",
         read_info_file.display()
     );
-    info!(
-        "write read information to file: {}",
-        out_fq_file.display()
-    );
+    
 
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
 
     let mut read_info_handle = Arc::new(Mutex::new(File::create(read_info_file).unwrap()));
-    let mut out_fq_handle = Arc::new(Mutex::new(File::create(out_fq_file).unwrap()));
+    let mut out_fq_handle = Arc::new(Mutex::new(File::create(out_fq_file.clone()).unwrap()));
 
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
         writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v);
@@ -111,7 +108,7 @@ fn main() {
     // 创建一个新的 MiniJinja 环境
     let env = Environment::new();
     // 从字符串创建一个模板
-    let template = env
+    let template: Template<'_, '_> = env
         .template_from_str(&template_string)
         .expect("无法从字符串创建模板");
 
@@ -160,7 +157,7 @@ fn main() {
 
                 writeln!(
                     read_info_handle.lock().unwrap(),
-                    "{}\t{}\t{}",
+                    "{}\t{}\t{}1",
                     read_name,
                     flag,
                     output_merge_str
@@ -176,17 +173,14 @@ fn main() {
             let read_seq = record_r1.seq();
             let seq_len = read_seq.len();
             let read_block_align = ReadBlockAlign::read_block_info(&record_r1, &block_info_list);
-
             let flag = read_block_align.get_block_flag();
             *flag_stat_hash.lock().unwrap().entry(flag).or_insert(0) += 1;
             let output_merge_str = read_block_align.get_block_str();
 
-            let seq_hash = read_block_align.get_seq_hashmap(&block_info_list);
-            if let Some(seq_hash) = seq_hash {
-                let ctx = Value::from_serializable(&seq_hash);
-                let output_seq = template.render(ctx).expect("无法渲染模板");
-                // dbg!(output_seq);
-                writeln!(out_fq_handle.lock().unwrap(), "{}", output_seq);
+            // export to file based on the jinja template
+            let template_str = read_block_align.template_str(&template, &block_info_list);
+            if let Some(template_str) = template_str {
+                writeln!(out_fq_handle.lock().unwrap(), "{}", template_str);
             }
 
             if let Some(export_block_list) = &export_block_list {
@@ -218,7 +212,7 @@ fn main() {
 
             writeln!(
                 read_info_handle.lock().unwrap(),
-                "{}\t{}\t{}\n",
+                "{}\t{}\t{}",
                 read_name,
                 flag,
                 output_merge_str
@@ -234,13 +228,14 @@ fn main() {
         "write block flag stat to file: {}",
         flag_stat_file.display()
     );
+    info!("write template information to file: {}", out_fq_file.display());
     let mut flag_stat_handle = File::create(flag_stat_file).unwrap();
 
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
-        write!(flag_stat_handle, "#idx:flag={}:{}\n", k, v);
+        writeln!(flag_stat_handle, "#idx:flag={}:{}", k, v);
     });
     flag_stat_hash.lock().unwrap().iter().for_each(|(k, v)| {
-        write!(flag_stat_handle, "{}\t{}\n", k, v);
+        writeln!(flag_stat_handle, "{}\t{}", k, v);
     });
 
     info!("End");
