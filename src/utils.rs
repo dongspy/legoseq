@@ -1,20 +1,20 @@
 use core::fmt;
 use std::collections::HashMap;
-use std::default;
+// use std::default;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+// use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use bio::alphabets::dna::complement;
 use bio::io::fasta;
-use bio::io::fastq::{self, Record};
+// use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
 use serde::Serialize;
 
-use crate::blockinfo::BlockInfo;
-use crate::readblockalign::{block_align_read, ReadBlockAlign};
+// use crate::blockinfo::BlockInfo;
+// use crate::readblockalign::{block_align_read, ReadBlockAlign};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub enum Strand {
@@ -100,7 +100,7 @@ pub fn write_fasta(seq_map: &HashMap<String, Vec<u8>>, out_file: &str) -> Result
     let mut writer = fasta::Writer::new(handle);
     seq_map.iter().for_each(|(read_id, seq)| {
         let record = fasta::Record::with_attrs(read_id, None, seq);
-        let write_result = writer.write_record(&record);
+        let _write_result = writer.write_record(&record);
     });
 
     Ok(())
@@ -144,7 +144,7 @@ pub fn union(ranges: Vec<std::ops::Range<i32>>) -> Vec<std::ops::Range<i32>> {
 }
 
 /// range difference
-fn difference(
+fn _difference(
     range1: std::ops::Range<i32>,
     ranges: Vec<std::ops::Range<i32>>,
 ) -> Vec<std::ops::Range<i32>> {

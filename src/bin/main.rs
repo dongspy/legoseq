@@ -87,7 +87,6 @@ fn main() {
         "write read information to file: {}",
         read_info_file.display()
     );
-    
 
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
 
@@ -178,7 +177,7 @@ fn main() {
             let output_merge_str = read_block_align.get_block_str();
 
             // export to file based on the jinja template
-            let template_str = read_block_align.template_str(&template, &block_info_list);
+            let template_str = read_block_align.template_str(&template);
             if let Some(template_str) = template_str {
                 writeln!(out_fq_handle.lock().unwrap(), "{}", template_str);
             }
@@ -186,13 +185,13 @@ fn main() {
             if let Some(export_block_list) = &export_block_list {
                 let new_record =
                     read_block_align.get_new_record(&block_info_list, export_block_list);
-                if new_record.is_some() {
+                if let Some(new_record) = new_record {
                     let out_fq1 = out_fq1.clone();
                     out_fq1
                         .unwrap()
                         .lock()
                         .unwrap()
-                        .write_record(&new_record.unwrap())
+                        .write_record(&new_record)
                         .unwrap();
 
                     // read2
@@ -228,7 +227,10 @@ fn main() {
         "write block flag stat to file: {}",
         flag_stat_file.display()
     );
-    info!("write template information to file: {}", out_fq_file.display());
+    info!(
+        "write template information to file: {}",
+        out_fq_file.display()
+    );
     let mut flag_stat_handle = File::create(flag_stat_file).unwrap();
 
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {

@@ -209,7 +209,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
         let fasta_seq_id_vec: Vec<&str> = fasta_seq_id.split(',').collect();
         info!("fasta record ids: {}", fasta_seq_id_vec.join(";"));
 
-        let seqs: HashMap<String, Vec<u8>> = (&fasta_seq_id_vec)
+        let seqs: HashMap<String, Vec<u8>> = fasta_seq_id_vec
             .iter()
             .map(|&x| {
                 (

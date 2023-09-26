@@ -218,7 +218,7 @@ impl BAligner {
                 };
                 // let align = ant_align(&index, read, &align_opts);
                 let antaligner = AntAligner {
-                    index: index,
+                    index,
                     opts: align_opts,
                     max_mismatch,
                 };

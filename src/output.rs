@@ -1,15 +1,11 @@
+#![allow(unused_imports)]
+use std::fmt::{self, Display};
+
 use minijinja::{
-    context,
     value::{Object, Value},
-    Environment, Template,
+    Environment,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-    fs,
-    hash::Hash,
-};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SeqOut {
