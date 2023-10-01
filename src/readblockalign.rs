@@ -101,20 +101,26 @@ impl ReadBlockAlign {
                 continue;
             }
 
-            let mut query_start;
+            let mut query_start = None;
+            let mut query_end = None;
             // 开头模块
             if block_ii == 0 {
                 // query_start = Some(0);
-                query_start = if strand.is_reverse().unwrap() {
-                    Some(read_len)
+                if strand.is_reverse().unwrap() {
+                    query_end = Some(read_len)
                 } else {
-                    Some(0)
+                    query_start = Some(0)
                 };
             } else {
                 let pre_block_info = &block_info_list[block_ii - 1];
                 let ba = block_align_hash.get(&pre_block_info.idx).unwrap();
+                
                 if let Some(ba) = ba {
-                    query_start = ba.get_query_end().map(|pos| pos + 1);
+                    if strand.is_reverse().unwrap(){
+                        query_end = ba.get_query_start();
+                    }else{
+                        query_start = ba.get_query_end();
+                    }
                 } else {
                     block_align_hash.insert(idx, None);
                     continue;
@@ -122,7 +128,7 @@ impl ReadBlockAlign {
             }
 
             // 末尾模块
-            let mut query_end;
+            
             if block_ii == (block_info_len - 1) {
                 // query_end = Some(read_len);
                 query_end = if strand.is_reverse().unwrap() {
@@ -136,14 +142,19 @@ impl ReadBlockAlign {
 
             if let Some(ba) = ba {
                 // query_start = ba.get_query_end().map(|pos| pos + 1);
-                query_end = ba.get_query_start().map(|pos| pos - 1);
+                if strand.is_reverse().unwrap(){
+                    query_start = ba.get_query_end();
+                }else{
+                    query_end = ba.get_query_start();
+            }
             } else {
                 block_align_hash.insert(idx, None);
                 continue;
             }
-            if strand.is_reverse().unwrap() {
-                (query_start, query_end) = (query_end, query_start);
-            }
+            // if strand.is_reverse().unwrap() {
+            //     (query_start, query_end) = (query_end, query_start);
+            // }
+
             // 存在异常
             // if query_start > query_end {
             //     block_align_hash.insert(idx, None);
