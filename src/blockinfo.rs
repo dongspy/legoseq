@@ -21,7 +21,8 @@ pub static BLOCKFLAGS: Lazy<Arc<Mutex<HashMap<usize, String>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(m))
 });
 
-enum SeqType {
+#[derive(Clone, Debug)]
+enum BlockType {
     /// 只是用于占位
     Fix,
     Anchor,
