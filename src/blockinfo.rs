@@ -3,6 +3,7 @@ use anyhow::Result;
 use bio::io::fasta;
 use csv::{ReaderBuilder, StringRecord};
 use once_cell::sync::Lazy;
+use rayon::vec;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
@@ -21,18 +22,45 @@ pub static BLOCKFLAGS: Lazy<Arc<Mutex<HashMap<usize, String>>>> = Lazy::new(|| {
     Arc::new(Mutex::new(m))
 });
 
-#[derive(Clone, Debug)]
-enum BlockType {
+#[derive(Clone, Debug, PartialEq)]
+pub enum BlockType {
     /// 只是用于占位
     Fix,
     Anchor,
     Index,
+    Variable,
+    Other,
+}
+
+impl BlockType {
+    fn from_str(s: &str) -> Self {
+        match s {
+            "Fix" => Self::Fix,
+            "Anchor" => Self::Anchor,
+            "Index" => Self::Index,
+            "Variable" => Self::Variable,
+            _ => Self::Other,
+        }
+    }
+
+    pub fn is_fix(&self) -> bool {
+        let type_vec = vec![BlockType::Fix, BlockType::Anchor, BlockType::Index];
+        type_vec.contains(self)
+    }
+
+    pub fn is_variable(&self) -> bool {
+        self.clone() == BlockType::Variable
+    }
+
+    pub fn is_index(&self) -> bool {
+        self.clone() == BlockType::Index
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct BlockInfo {
     pub idx: String,
-    pub seq_type: String,
+    pub seq_type: BlockType,
     pub seqs: HashMap<String, Vec<u8>>,
     pub max_mismatch: usize,
     pub query_start: Option<usize>,
@@ -91,10 +119,11 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
     let mut flag: usize = 1;
     for result in rdr.deserialize() {
         let record: BlockInfoFile = result.unwrap();
-        if &record.seq_type == "Fix" {
+        let block_type = BlockType::from_str(&record.seq_type);
+        if block_type.is_fix() {
             let bi = BlockInfo {
                 idx: record.idx.clone(),
-                seq_type: record.seq_type,
+                seq_type: block_type,
                 seqs: HashMap::new(),
                 max_mismatch: record.max_mismatch,
                 query_start: record.query_start,
@@ -117,7 +146,7 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
         let aligner = BAligner::new(record.method, &seq_hash, record.max_mismatch);
         let bi = BlockInfo {
             idx: record.idx.clone(),
-            seq_type: record.seq_type,
+            seq_type: BlockType::from_str(&record.seq_type),
             seqs,
             max_mismatch: record.max_mismatch,
             query_start: record.query_start,
@@ -133,6 +162,8 @@ pub fn get_block_info(file_path: &str) -> Vec<BlockInfo> {
     block_info_vec
 }
 
+/// block infromation mapping with the file,
+/// only have fasta_seq_id instead of seqs
 #[derive(Debug, Clone, Default, Deserialize)]
 struct BlockInfoFileWithoutFasta {
     idx: String,
@@ -173,9 +204,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
     // let mut rdr = csv::ReaderBuilder::new().delimiter(b'\t').from_reader(file);
     let mut block_info_vec: Vec<BlockInfo> = vec![];
     let mut flag: usize = 1;
-    // let fasta_seq = read_fasta(fasta_file).unwrap();
-    // let fasta_record = fasta::Record::from_bufread()
-    info!(fasta_str);
+    // info!(fasta_str);
     let reader = fasta::Reader::new(Cursor::new(fasta_str));
     let fasta_seq: HashMap<String, Vec<u8>> = reader
         .records()
@@ -185,12 +214,12 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
 
     for result in rdr.deserialize() {
         let record: BlockInfoFileWithoutFasta = result.unwrap();
-
-        if &record.seq_type != "Fix" {
-            // 针对固定序列的处理
+        let seq_type = BlockType::from_str(&record.seq_type);
+        if !seq_type.is_fix() {
+            // 针对可变序列的处理
             let bi = BlockInfo {
                 idx: record.idx.clone(),
-                seq_type: record.seq_type,
+                seq_type: seq_type,
                 seqs: HashMap::new(),
                 max_mismatch: record.max_mismatch,
                 query_start: record.query_start,
@@ -208,7 +237,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
             .clone()
             .expect("fasta_seq_id in fix mod must be set");
         let fasta_seq_id_vec: Vec<&str> = fasta_seq_id.split(',').collect();
-        info!("fasta record ids: {}", fasta_seq_id_vec.join(";"));
+        // info!("the number of record from fasta file: {}", fasta_seq_id_vec.len());
 
         let seqs: HashMap<String, Vec<u8>> = fasta_seq_id_vec
             .iter()
@@ -226,7 +255,7 @@ pub fn get_block_info_fasta(blockinfo_str: &str, fasta_str: &str) -> Result<Vec<
         let aligner = BAligner::new(record.method, &seqs, record.max_mismatch);
         let bi = BlockInfo {
             idx: record.idx.clone(),
-            seq_type: record.seq_type,
+            seq_type: BlockType::from_str(&record.seq_type),
             seqs,
             max_mismatch: record.max_mismatch,
             query_start: record.query_start,

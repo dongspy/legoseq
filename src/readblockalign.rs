@@ -8,6 +8,7 @@ use minijinja::Template;
 use serde::{Deserialize, Serialize};
 
 use crate::aligner::Alignment;
+use crate::blockinfo::get_block_info_fasta;
 use crate::utils::Strand;
 use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
@@ -21,28 +22,12 @@ pub struct ReadBlockAlign {
     strand: Strand,
 }
 
-impl ReadBlockAlign {
-    pub fn new(
-        block_idx_list: &[String],
-        record: &Record,
-        block_align: &HashMap<String, Option<BlockAlign>>,
-        strand: Strand,
-    ) -> Self {
-        ReadBlockAlign {
-            block_idx_list: block_idx_list.to_vec(),
-            record: record.clone(),
-            block_align: block_align.clone(),
-            strand,
-        }
-    }
-}
-
 /// read sequence mapping aganist the block sequence
 /// return BlockAlign vector
 pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Option<BlockAlign>> {
     let mut block_align_list: Vec<Option<BlockAlign>> = vec![];
 
-    for block_info in block_info_list.iter().filter(|x| x.seq_type != "Fix") {
+    for block_info in block_info_list.iter().filter(|x| x.seq_type.is_variable()) {
         let block_info = block_info.to_owned();
         // block_info.query_start = Some(pre_query_end.saturating_sub(OFFSET));
         // let ba = block_info.clone().align(read, aligner);
@@ -64,6 +49,47 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
 }
 
 impl ReadBlockAlign {
+    pub fn new(
+        block_idx_list: &[String],
+        record: &Record,
+        block_align: &HashMap<String, Option<BlockAlign>>,
+        strand: Strand,
+    ) -> Self {
+        ReadBlockAlign {
+            block_idx_list: block_idx_list.to_vec(),
+            record: record.clone(),
+            block_align: block_align.clone(),
+            strand,
+        }
+    }
+
+    pub fn get_best_index(&self) -> Vec<String> {
+        // let mut best_index = None;
+        let mut best_index_vec = vec![];
+        self.block_idx_list.iter().for_each(|x| {
+            let block_align = self.block_align.get(x).unwrap();
+            if let Some(block_align) = block_align {
+                if block_align.info.seq_type.is_index() {
+                    best_index_vec.push(block_align.best_index.clone());
+                }
+            } else {
+                // best_index = None;
+            }
+        });
+        // self.block_align.iter().for_each(|(_name, block_align)|{
+        //     let block_align = block_align.clone();
+        //     if let Some(block_align) = block_align{
+        //         if block_align.info.seq_type.is_index() {
+        //             best_index_vec.push(block_align.best_index);
+        //         }
+        //     }else{
+        //         // best_index = None;
+        //     }
+        // });
+
+        best_index_vec
+    }
+
     /// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
     pub fn read_block_info(record: &Record, block_info_list: &[BlockInfo]) -> Self {
         let read = record.seq();
@@ -72,7 +98,7 @@ impl ReadBlockAlign {
 
         let mut strand_vec: Vec<Strand> = vec![];
         // 处理 anchor/fix 序列
-        for block_info in block_info_list.iter().filter(|x| x.seq_type == "Fix") {
+        for block_info in block_info_list.iter().filter(|x| x.seq_type.is_fix()) {
             let block_info = block_info.clone();
             let idx = block_info.idx.clone();
             let align: Option<Alignment> = block_info.aligner.clone().and_then(|x| x.align(read));
@@ -97,7 +123,7 @@ impl ReadBlockAlign {
         for block_ii in 0..block_info_len {
             let block_info = block_info_list[block_ii].clone();
             let idx = block_info.idx.to_string();
-            if block_info.seq_type != "Variable" {
+            if !block_info.seq_type.is_variable() {
                 continue;
             }
 
@@ -114,11 +140,11 @@ impl ReadBlockAlign {
             } else {
                 let pre_block_info = &block_info_list[block_ii - 1];
                 let ba = block_align_hash.get(&pre_block_info.idx).unwrap();
-                
+
                 if let Some(ba) = ba {
-                    if strand.is_reverse().unwrap(){
+                    if strand.is_reverse().unwrap() {
                         query_end = ba.get_query_start();
-                    }else{
+                    } else {
                         query_start = ba.get_query_end();
                     }
                 } else {
@@ -128,7 +154,7 @@ impl ReadBlockAlign {
             }
 
             // 末尾模块
-            
+
             if block_ii == (block_info_len - 1) {
                 // query_end = Some(read_len);
                 query_end = if strand.is_reverse().unwrap() {
@@ -142,11 +168,11 @@ impl ReadBlockAlign {
 
             if let Some(ba) = ba {
                 // query_start = ba.get_query_end().map(|pos| pos + 1);
-                if strand.is_reverse().unwrap(){
+                if strand.is_reverse().unwrap() {
                     query_start = ba.get_query_end();
-                }else{
+                } else {
                     query_end = ba.get_query_start();
-            }
+                }
             } else {
                 block_align_hash.insert(idx, None);
                 continue;
@@ -242,7 +268,7 @@ impl ReadBlockAlign {
         let mut block_hash = HashMap::new();
         block_info_list
             .iter()
-            .filter(|&x| x.seq_type == "Fix")
+            .filter(|&x| x.seq_type.is_fix())
             .for_each(|x| {
                 block_hash.insert(
                     x.idx.to_owned(),
@@ -318,6 +344,8 @@ impl ReadBlockAlign {
             "read".to_string(),
             JinjaSeq {
                 name: String::from_utf8(self.record.name().to_vec()).unwrap_or("".to_string()),
+                seq: String::from_utf8(self.record.seq().to_vec()).unwrap_or("".to_string()),
+                qual: String::from_utf8(self.record.qual().to_vec()).unwrap_or("".to_string()),
                 ..Default::default()
             },
         );
@@ -410,9 +438,9 @@ impl JinjaSeq {
 #[test]
 fn test_block_align_read_with_insert() {
     let blockinfo_str = "idx	seq_type	fasta_seq_id	max_mismatch	query_start	query_end	seq_len	method
-aa	Fix	aa1,aa2	2				ANT
-bb	Variable	bb1,bb2	2				ANT
-cc	Fix	cc1,cc2	2				ANT";
+Fix_0	Fix	aa1,aa2	2				ANT
+Variable_1	Variable	aa1,aa2	2				ANT
+Fix_2	Fix	cc1,cc2	2				ANT";
     // println!("{}", blockinfo_str);
     let fasta_file = ">aa1
 AAAAAAAAAAAAA
@@ -429,6 +457,7 @@ CCCCCCCCCCCCC";
     let blockinfo_vec = get_block_info_fasta(blockinfo_str, fasta_file).unwrap();
     let read =
         b"CTGGGGGGGGGGGGGGCGATCGATCGTAAACCCCCCCCCCCCCCAACGCTTTTTTTTTTTTTTCTCGCTATATCGTATCGATGTAC";
+    let read = b"AAAAAAAAAAAAAATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGCCCCCCCCCCCCC";
     let record = Record::with_attrs("read01_rev", None, read, read);
     let read_block_align = ReadBlockAlign::read_block_info(&record, &blockinfo_vec);
     let block_align = &read_block_align.block_align;
@@ -438,7 +467,10 @@ CCCCCCCCCCCCC";
             println!("{k}: {}", v.to_abbr().unwrap().to_str());
         }
     }
-    let seq_hashmap = read_block_align.get_seq_hashmap().unwrap();
-    dbg!(seq_hashmap);
+    let best_index_vec = read_block_align.get_best_index();
+    let best_index_str = best_index_vec.join("_");
+    dbg!(best_index_str);
+    // let seq_hashmap = read_block_align.get_seq_hashmap().unwrap();
+    // dbg!(seq_hashmap);
     // dbg!(block_align);
 }

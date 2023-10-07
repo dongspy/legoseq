@@ -6,6 +6,7 @@ use bio::io::fastq::{self, Record};
 use clap::command;
 use clap::Parser;
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use dashmap::DashMap;
 use minijinja::{context, value::Value, Environment, Template};
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
@@ -79,20 +80,18 @@ fn main() {
     let outdir = Path::new(outdir);
     let read_info_file = outdir.join(format!("{}.{}", prefix, "read_info.stat.tsv"));
     let out_fq_file = outdir.join(format!("{}.{}", prefix, "template.out.fastq"));
-    info!(
-        "write read information to file: {}",
-        read_info_file.display()
-    );
+    
 
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
-
-    let mut read_info_handle = Arc::new(Mutex::new(File::create(read_info_file).unwrap()));
-    let mut out_fq_handle = Arc::new(Mutex::new(File::create(out_fq_file.clone()).unwrap()));
+    let read_info_handle = Arc::new(Mutex::new(File::create(read_info_file.clone()).unwrap()));
+    let out_fq_handle: Arc<Mutex<File>> =
+        Arc::new(Mutex::new(File::create(out_fq_file.clone()).unwrap()));
+    let barcode_handle_hash: DashMap<String, Arc<Mutex<File>>> = DashMap::new();
+    // let mut barcode_handle_hash = Arc::new(Mutex::new(barcode_handle_hash));
 
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
-        writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v);
+        writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v).unwrap();
     });
-
 
     //minijinja
     let template_string = fs::read_to_string(template.clone().unwrap()).expect("无法读取模板文件");
@@ -118,7 +117,6 @@ fn main() {
                 let record_r1 = record_r1.unwrap();
                 let record_r2 = record_r2.unwrap();
                 let read_name = record_r1.id();
-                let read_seq = record_r1.seq();
                 let read_block_align =
                     ReadBlockAlign::read_block_info(&record_r1, &block_info_list);
                 // let block_align_list = read_block_align.block_align;
@@ -140,18 +138,34 @@ fn main() {
                 // demultiplexed the fastq file
             });
     } else {
-        record_r1.into_iter().par_bridge().for_each(|(record_r1)| {
+        record_r1.into_iter().par_bridge().for_each(|record_r1| {
             let record_r1 = record_r1.unwrap();
             let read_name = record_r1.id();
             let read_block_align = ReadBlockAlign::read_block_info(&record_r1, &block_info_list);
             let flag = read_block_align.get_block_flag();
-            let output_merge_str = read_block_align.get_block_str();
-
-            // export to file based on the jinja template
-            let template_str = read_block_align.template_str(&template);
-            if let Some(template_str) = template_str {
-                writeln!(out_fq_handle.lock().unwrap(), "{}", template_str).unwrap();
+            let best_index_vec = read_block_align.get_best_index();
+            
+            // if barcode index existed, demultiplex
+            if !best_index_vec.is_empty() {
+                let best_index_str = best_index_vec.join("_");
+                let barcode_file =
+                    outdir.join(format!("{}.{}.{}", prefix, best_index_str, "fastq"));
+                let barcode_handle = barcode_handle_hash
+                    .entry(barcode_file.to_str().unwrap().to_string())
+                    .or_insert_with(|| Arc::new(Mutex::new(File::create(barcode_file).unwrap())));
+                let template_str = read_block_align.template_str(&template);
+                if let Some(template_str) = template_str {
+                    writeln!(barcode_handle.lock().unwrap(), "{}", template_str).unwrap();
+                }
+            } else {
+                // export to file based on the jinja template
+                let template_str = read_block_align.template_str(&template);
+                if let Some(template_str) = template_str {
+                    writeln!(out_fq_handle.lock().unwrap(), "{}", template_str).unwrap();
+                }
             }
+
+            let output_merge_str = read_block_align.get_block_str();
 
             writeln!(
                 read_info_handle.lock().unwrap(),
@@ -167,6 +181,10 @@ fn main() {
 
     let flag_stat_file = outdir.join(format!("{}.{}", prefix, "block_flag.stat.tsv"));
     info!(
+        "write read information to file: {}",
+        read_info_file.display()
+    );
+    info!(
         "write block flag stat to file: {}",
         flag_stat_file.display()
     );
@@ -177,10 +195,10 @@ fn main() {
     let mut flag_stat_handle = File::create(flag_stat_file).unwrap();
 
     BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
-        writeln!(flag_stat_handle, "#idx:flag={}:{}", k, v);
+        writeln!(flag_stat_handle, "#idx:flag={}:{}", k, v).unwrap();
     });
     flag_stat_hash.lock().unwrap().iter().for_each(|(k, v)| {
-        writeln!(flag_stat_handle, "{}\t{}", k, v);
+        writeln!(flag_stat_handle, "{}\t{}", k, v).unwrap();
     });
 
     info!("End");
