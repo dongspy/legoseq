@@ -142,11 +142,23 @@ impl ReadBlockAlign {
                 let ba = block_align_hash.get(&pre_block_info.idx).unwrap();
 
                 if let Some(ba) = ba {
-                    if strand.is_reverse().unwrap() {
-                        query_end = ba.get_query_start();
-                    } else {
-                        query_start = ba.get_query_end();
+                    match strand {
+                        Strand::Plus => {
+                            query_start = ba.get_query_end();
+                        }
+                        Strand::Minus => {
+                            query_end = ba.get_query_start();
+                        }
+                        Strand::Ambiguous => {
+                            block_align_hash.insert(idx, None);
+                            continue;
+                        }
                     }
+                    // if strand.is_reverse().unwrap() {
+                    //     query_end = ba.get_query_start();
+                    // } else {
+                    //     query_start = ba.get_query_end();
+                    // }
                 } else {
                     block_align_hash.insert(idx, None);
                     continue;
