@@ -1,0 +1,2 @@
+>{{read.name}} {{Fix_2.seq}}
+{{read.seq}}

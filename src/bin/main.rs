@@ -31,13 +31,9 @@ struct Cli {
     /// fasta file
     #[arg(long, value_name = "FILE")]
     fasta: String,
-    /// Sets a custom block information file
+    /// custom block information file
     #[arg(long, value_name = "BLOCKINFO")]
     block_info: String,
-
-    /// Sets a custom block information file
-    // #[arg(long, value_name = "BLOCKINFO2")]
-    // block_info2: String,
     /// threads
     #[arg(long, value_name = "FILE")]
     threads: usize,
@@ -51,9 +47,6 @@ struct Cli {
     /// the template file
     #[arg(long, value_name = "PATH")]
     template: Option<String>,
-    /// the template file
-    #[arg(long, value_name = "PATH")]
-    template2: Option<String>,
 }
 
 fn main() {
