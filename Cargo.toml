@@ -33,8 +33,8 @@ serde = { version = "1", features = ["derive"] }
 csv = "1.1"
 minijinja = "*"
 serde_json = "*"
-# ant = {git="https://github.com/dongspy/ant.git"}
-ant = {path="../ant"}
+ant = {git="https://github.com/dongspy/ant.git"}
+#ant = {path="../ant"}
 dashmap = "5.5.3"
 
 # wasm
