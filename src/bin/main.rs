@@ -1,31 +1,23 @@
 // #![allow(dead_code)]
 // #![allow(unused)]
-use bio::alignment::pairwise::{banded::Aligner, MatchFunc};
-use bio::io::fastq::{self, Record};
-// use bio_types::alignment::Alignment;
+use bio::io::fastq;
 use clap::command;
 use clap::Parser;
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use dashmap::{DashMap, DashSet};
-use minijinja::{context, value::Value, Environment, Template};
-use once_cell::sync::Lazy;
+use dashmap::DashMap;
+use minijinja::{Environment, Template};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, warn, Level};
-use tracing_subscriber::fmt::format;
+use tracing::info;
 
-use legoseq::aligner::Alignment;
-// use legoseq::blockalign::{BlockAlign, BlockAlignAbbr};
-use legoseq::blockinfo::{get_block_info_fasta_from_file, BlockInfo, BLOCKFLAGS};
+use legoseq::blockinfo::{get_block_info_fasta_from_file, BLOCKFLAGS};
 use legoseq::readblockalign::ReadBlockAlign;
 use legoseq::utils::get_reader;
 
-// static CLI: Lazy<Cli> = Lazy::new(Cli::parse);
 
 #[derive(Parser)]
 #[command(version, author, about, long_about = None)]
@@ -107,22 +99,22 @@ fn main() {
     if let Some(r2_file) = r2_file {
         // output read info  statistics
 
-        let out_fq_file_r1 = outdir.join(format!("{}.{}", prefix, "template.out.r1.fastq"));
-        let out_fq_file_r2 = outdir.join(format!("{}.{}", prefix, "template.out.r2.fastq"));
+        let out_fq_file_r1 = outdir.join(format!("{}.{}", prefix, "template.r1.fastq"));
+        let out_fq_file_r2 = outdir.join(format!("{}.{}", prefix, "template.r2.fastq"));
+        let ud_fq_file_r1 = outdir.join(format!("{}.{}", prefix, "undetermined.r1.fastq"));
+        let ud_fq_file_r2 = outdir.join(format!("{}.{}", prefix, "undetermined.r2.fastq"));
+
         let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
-        // let out_fq_handle_r1: Arc<Mutex<File>> =
-        //     Arc::new(Mutex::new(File::create(out_fq_file_r1.clone()).unwrap()));
-
-        // let out_fq_handle_r2: Arc<Mutex<File>> =
-        //     Arc::new(Mutex::new(File::create(out_fq_file_r2.clone()).unwrap()));
-        // let out_fq_handle_map = DashMap::new();
-        // out_fq_handle_map.insert(0, Arc::new(Mutex::new(File::create(out_fq_file_r1.clone()).unwrap())));
-        // out_fq_handle_map.insert(1, Arc::new(Mutex::new(File::create(out_fq_file_r2.clone()).unwrap())));
-
         let out_fq_handle_vec = Arc::new(Mutex::new(vec![
             File::create(out_fq_file_r1.clone()).unwrap(),
             File::create(out_fq_file_r2.clone()).unwrap(),
         ]));
+        let ud_fq_handle_vec = Arc::new(Mutex::new(vec![
+            File::create(ud_fq_file_r1.clone()).unwrap(),
+            File::create(ud_fq_file_r2.clone()).unwrap(),
+        ]));
+        
+
         let barcode_handle_hash: DashMap<String, Arc<Mutex<Vec<File>>>> = DashMap::new();
 
         let record_r2 = fastq::Reader::new(get_reader(r2_file)).records();
@@ -164,7 +156,7 @@ fn main() {
                         .unwrap();
                         writeln!(
                             barcode_handle.lock().unwrap().get(1).unwrap(),
-                            "@{} {}\n+\n{}\n{}",
+                            "@{} {}\n{}\n+\n{}",
                             record_r2.id(),
                             // record_r2.desc().expect(""),
                             "",
@@ -172,30 +164,11 @@ fn main() {
                             String::from_utf8_lossy(record_r2.qual()) //    String::from
                         )
                         .unwrap();
-                    }
-                } else {
-                    // export to file based on the jinja template
-                    let template_str = read_block_align.template_str(&template);
-                    
-                    if let Some(template_str) = template_str {
-                        let out_fq_handle = out_fq_handle_vec.lock().unwrap();
-                        // println!("{}", &template_str);
-                        writeln!(out_fq_handle.get(0).unwrap(), "{}", template_str).unwrap();
-                        writeln!(
-                            out_fq_handle.get(1).unwrap(),
-                            "@{} {}\n+{}\n{}",
-                            record_r2.id(),
-                            record_r2.desc().unwrap(),
-                            String::from_utf8_lossy(record_r2.seq()),
-                            String::from_utf8_lossy(record_r2.qual())
-                        )
-                        .unwrap();
-                    }else{
-                        // let out_fq_handle = out_fq_handle_vec.lock().unwrap();
-                        let out_fq_handle = out_fq_handle_vec.lock().unwrap();
+                    } else {
+                        let out_fq_handle = ud_fq_handle_vec.lock().unwrap();
                         writeln!(
                             out_fq_handle.get(0).unwrap(),
-                            "@{} {}\n+{}\n{}",
+                            "@{} {}\n{}\n+\n{}",
                             record_r1.id(),
                             record_r1.desc().unwrap_or(""),
                             String::from_utf8_lossy(record_r1.seq()),
@@ -204,7 +177,46 @@ fn main() {
                         .unwrap();
                         writeln!(
                             out_fq_handle.get(1).unwrap(),
-                            "@{} {}\n+{}\n{}",
+                            "@{} {}\n{}\n+\n{}",
+                            record_r2.id(),
+                            record_r2.desc().unwrap_or(""),
+                            // "",
+                            String::from_utf8_lossy(record_r2.seq()),
+                            String::from_utf8_lossy(record_r2.qual())
+                        )
+                        .unwrap();
+                    }
+                } else {
+                    // export to file based on the jinja template
+                    let template_str = read_block_align.template_str(&template);
+
+                    if let Some(template_str) = template_str {
+                        let out_fq_handle = out_fq_handle_vec.lock().unwrap();
+                        // println!("{}", &template_str);
+                        writeln!(out_fq_handle.get(0).unwrap(), "{}", template_str).unwrap();
+                        writeln!(
+                            out_fq_handle.get(1).unwrap(),
+                            "@{} {}\n{}\n+\n{}",
+                            record_r2.id(),
+                            record_r2.desc().unwrap(),
+                            String::from_utf8_lossy(record_r2.seq()),
+                            String::from_utf8_lossy(record_r2.qual())
+                        )
+                        .unwrap();
+                    } else {
+                        let out_fq_handle = ud_fq_handle_vec.lock().unwrap();
+                        writeln!(
+                            out_fq_handle.get(0).unwrap(),
+                            "@{} {}\n{}\n+\n{}",
+                            record_r1.id(),
+                            record_r1.desc().unwrap_or(""),
+                            String::from_utf8_lossy(record_r1.seq()),
+                            String::from_utf8_lossy(record_r1.qual())
+                        )
+                        .unwrap();
+                        writeln!(
+                            out_fq_handle.get(1).unwrap(),
+                            "@{} {}\n{}\n+\n{}",
                             record_r2.id(),
                             record_r2.desc().unwrap_or(""),
                             // "",
@@ -228,12 +240,17 @@ fn main() {
                 *flag_stat_hash.lock().unwrap().entry(flag).or_insert(0) += 1;
             })
     } else {
-        let out_fq_file = outdir.join(format!("{}.{}", prefix, "template.out.fastq"));
+        let out_fq_file = outdir.join(format!("{}.{}", prefix, "template.fastq"));
+        let ud_fq_file = outdir.join(format!("{}.{}", prefix, "undetermined.fastq"));
+
         let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
         let read_info_handle = Arc::new(Mutex::new(File::create(read_info_file.clone()).unwrap()));
         let out_fq_handle: Arc<Mutex<File>> =
             Arc::new(Mutex::new(File::create(out_fq_file.clone()).unwrap()));
+        let ud_fq_handle: Arc<Mutex<File>> =
+            Arc::new(Mutex::new(File::create(ud_fq_file.clone()).unwrap()));
         let barcode_handle_hash: DashMap<String, Arc<Mutex<Vec<File>>>> = DashMap::new();
+
         BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
             writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v).unwrap();
         });
@@ -264,17 +281,38 @@ fn main() {
                         template_str
                     )
                     .unwrap();
+                }else{
+                    // let out_fq_handle = out_fq_handle.lock().unwrap();
+                        writeln!(
+                            ud_fq_handle.lock().unwrap(),
+                            "@{} {}\n+\n{}\n{}",
+                            record_r1.id(),
+                            record_r1.desc().unwrap_or(""),
+                            String::from_utf8_lossy(record_r1.seq()),
+                            String::from_utf8_lossy(record_r1.qual())
+                        )
+                        .unwrap();
                 }
             } else {
                 // export to file based on the jinja template
                 let template_str = read_block_align.template_str(&template);
                 if let Some(template_str) = template_str {
                     writeln!(out_fq_handle.lock().unwrap(), "{}", template_str).unwrap();
+                }else{
+                    // let out_fq_handle = out_fq_handle.lock().unwrap();
+                        writeln!(
+                            ud_fq_handle.lock().unwrap(),
+                            "@{} {}\n+\n{}\n{}",
+                            record_r1.id(),
+                            record_r1.desc().unwrap_or(""),
+                            String::from_utf8_lossy(record_r1.seq()),
+                            String::from_utf8_lossy(record_r1.qual())
+                        )
+                        .unwrap();
                 }
             }
 
             let output_merge_str = read_block_align.get_block_str();
-
             writeln!(
                 read_info_handle.lock().unwrap(),
                 "{}\t{}\t{}",

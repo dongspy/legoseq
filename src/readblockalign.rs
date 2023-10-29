@@ -8,7 +8,7 @@ use minijinja::Template;
 use serde::{Deserialize, Serialize};
 
 use crate::aligner::Alignment;
-use crate::blockinfo::get_block_info_fasta;
+// use crate::blockinfo::get_block_info_fasta;
 use crate::utils::Strand;
 use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
