@@ -131,12 +131,14 @@ impl ReadBlockAlign {
             let mut query_end = None;
             // 开头模块
             if block_ii == 0 {
-                // query_start = Some(0);
-                if strand.is_reverse().unwrap() {
-                    query_end = Some(read_len)
-                } else {
-                    query_start = Some(0)
-                };
+                match strand {
+                    Strand::Plus => query_start = Some(0),
+                    Strand::Minus => query_end = Some(read_len),
+                    Strand::Ambiguous => {
+                        block_align_hash.insert(idx, None);
+                        continue;
+                    }
+                }
             } else {
                 let pre_block_info = &block_info_list[block_ii - 1];
                 let ba = block_align_hash.get(&pre_block_info.idx).unwrap();
@@ -174,31 +176,22 @@ impl ReadBlockAlign {
                 } else {
                     Some(read_len)
                 };
-            }
-            let next_block_info = &block_info_list[block_ii + 1];
-            let ba = block_align_hash.get(&next_block_info.idx).unwrap().clone();
-
-            if let Some(ba) = ba {
-                // query_start = ba.get_query_end().map(|pos| pos + 1);
-                if strand.is_reverse().unwrap() {
-                    query_start = ba.get_query_end();
-                } else {
-                    query_end = ba.get_query_start();
-                }
             } else {
-                block_align_hash.insert(idx, None);
-                continue;
-            }
-            // if strand.is_reverse().unwrap() {
-            //     (query_start, query_end) = (query_end, query_start);
-            // }
+                let next_block_info = &block_info_list[block_ii + 1];
+                let ba = block_align_hash.get(&next_block_info.idx).unwrap().clone();
 
-            // 存在异常
-            // if query_start > query_end {
-            //     block_align_hash.insert(idx, None);
-            //     continue;
-            // }
-            // let
+                if let Some(ba) = ba {
+                    // query_start = ba.get_query_end().map(|pos| pos + 1);
+                    if strand.is_reverse().unwrap() {
+                        query_start = ba.get_query_end();
+                    } else {
+                        query_end = ba.get_query_start();
+                    }
+                } else {
+                    block_align_hash.insert(idx, None);
+                    continue;
+                }
+            }
             let align = Alignment {
                 best_index: "".to_string(),
                 index_start: 0,
