@@ -18,16 +18,18 @@ use legoseq::blockinfo::{get_block_info_fasta_from_file, BLOCKFLAGS};
 use legoseq::readblockalign::ReadBlockAlign;
 use legoseq::utils::get_reader;
 
-
 #[derive(Parser)]
 #[command(version, author, about, long_about = None)]
 struct Cli {
     /// fastq file
     #[arg(long, value_name = "FILE")]
-    fq1: String,
+    in1: String,
     /// fastq file, optional
     #[arg(long, value_name = "FILE")]
-    fq2: Option<String>,
+    in2: Option<String>,
+    /// input type, fasta or fastq, default is fastq
+    #[arg(long, value_name = "INPUT_TYPE", default_value="fastq")]
+    input_type: Option<String>,
     /// fasta file
     #[arg(long, value_name = "FILE")]
     fasta: String,
@@ -53,15 +55,12 @@ fn main() {
     let cli = Cli::parse();
     let threads = &cli.threads.to_owned();
     let outdir = &cli.outdir;
-    let r1_file = &cli.fq1;
-    let r2_file = &cli.fq2;
+    let r1_file = &cli.in1;
+    let r2_file = &cli.in2;
     let fasta_file = &cli.fasta;
     let block_info_file = &cli.block_info;
-    // let block_info_file2 = &cli.block_info2;
     let prefix = &cli.prefix;
-    // let export_blocks = &CLI.export_blocks;
     let template: &Option<String> = &cli.template;
-    // let template2: &Option<String> = &cli.template2;
     tracing_subscriber::fmt::init();
     info!("Start");
 
@@ -106,7 +105,6 @@ fn main() {
             File::create(ud_fq_file_r1.clone()).unwrap(),
             File::create(ud_fq_file_r2.clone()).unwrap(),
         ]));
-        
 
         let barcode_handle_hash: DashMap<String, Arc<Mutex<Vec<File>>>> = DashMap::new();
 
@@ -274,34 +272,34 @@ fn main() {
                         template_str
                     )
                     .unwrap();
-                }else{
+                } else {
                     // let out_fq_handle = out_fq_handle.lock().unwrap();
-                        writeln!(
-                            ud_fq_handle.lock().unwrap(),
-                            "@{} {}\n+\n{}\n{}",
-                            record_r1.id(),
-                            record_r1.desc().unwrap_or(""),
-                            String::from_utf8_lossy(record_r1.seq()),
-                            String::from_utf8_lossy(record_r1.qual())
-                        )
-                        .unwrap();
+                    writeln!(
+                        ud_fq_handle.lock().unwrap(),
+                        "@{} {}\n+\n{}\n{}",
+                        record_r1.id(),
+                        record_r1.desc().unwrap_or(""),
+                        String::from_utf8_lossy(record_r1.seq()),
+                        String::from_utf8_lossy(record_r1.qual())
+                    )
+                    .unwrap();
                 }
             } else {
                 // export to file based on the jinja template
                 let template_str = read_block_align.template_str(&template);
                 if let Some(template_str) = template_str {
                     writeln!(out_fq_handle.lock().unwrap(), "{}", template_str).unwrap();
-                }else{
+                } else {
                     // let out_fq_handle = out_fq_handle.lock().unwrap();
-                        writeln!(
-                            ud_fq_handle.lock().unwrap(),
-                            "@{} {}\n+\n{}\n{}",
-                            record_r1.id(),
-                            record_r1.desc().unwrap_or(""),
-                            String::from_utf8_lossy(record_r1.seq()),
-                            String::from_utf8_lossy(record_r1.qual())
-                        )
-                        .unwrap();
+                    writeln!(
+                        ud_fq_handle.lock().unwrap(),
+                        "@{} {}\n+\n{}\n{}",
+                        record_r1.id(),
+                        record_r1.desc().unwrap_or(""),
+                        String::from_utf8_lossy(record_r1.seq()),
+                        String::from_utf8_lossy(record_r1.qual())
+                    )
+                    .unwrap();
                 }
             }
 
