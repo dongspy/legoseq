@@ -8,10 +8,11 @@ use std::ops::Range;
 
 use anyhow::Result;
 use bio::alphabets::dna::complement;
-use bio::io::fasta;
+use bio::io::{fasta, fastq};
 // use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
 use serde::Serialize;
+// use anyhow::Result;
 
 // use crate::blockinfo::BlockInfo;
 // use crate::readblockalign::{block_align_read, ReadBlockAlign};
@@ -222,3 +223,32 @@ fn test_dna_to_spans() {
 <span class='C'>GTAC</span><span class='other'>GTACGTACGTACGT</span>"
     )
 }
+
+/// Helper function to convert a FASTA record to a FASTQ record with random quality scores.
+fn fa2fq(record: fasta::Record) -> fastq::Record {
+    let sequence = record.seq().to_owned();
+    let seq_len = (&record.seq()).len();
+    let quality = b"F".repeat(seq_len);
+    fastq::Record::with_attrs(&record.id(), record.desc(), &sequence, &quality)
+}
+
+// fn read_sequence(
+//     reader: Box<dyn std::io::Read + Send>,
+//     input_type: &str,
+// ) -> Box<dyn Iterator<Item = io::Result<fastq::Record>> + Send> {
+//     match input_type {
+//         "fastq" => {
+//             let reader = fastq::Reader::new(reader);
+//             Box::new(reader.records().map(|x| x))
+//         },
+//         "fasta" => {
+//             let reader = fasta::Reader::new(reader);
+//             Box::new(
+//                 reader.records().map(|res| {
+//                     res.map(fa2fq)
+//                 })
+//             )
+//         },
+//         _ =>{todo!()}
+//     }
+// }

@@ -1,23 +1,27 @@
 #![allow(unused_assignments)]
 use std::collections::HashMap;
 
-use bio::io::fastq::Record;
+// use bio::io::fastq::Record;
 use bio_types::sequence::SequenceRead;
 use minijinja::value::Value;
 use minijinja::Template;
 use serde::{Deserialize, Serialize};
+use bio::io::{fasta, fastq};
 
 use crate::aligner::Alignment;
+use crate::blockinfo::get_block_info_fasta;
 // use crate::blockinfo::get_block_info_fasta;
 use crate::utils::Strand;
 use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
+use crate::record::Record;
+
 
 /// save the fastq record and its block align information
 #[derive(Debug, Clone)]
-pub struct ReadBlockAlign {
+pub struct ReadBlockAlign<R:Record+Clone> {
     pub block_idx_list: Vec<String>,
-    pub record: Record,
+    pub record: R,
     pub block_align: HashMap<String, Option<BlockAlign>>, // blockname: block_align
     strand: Strand,
 }
@@ -48,10 +52,10 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
     block_align_list
 }
 
-impl ReadBlockAlign {
+impl<R:Record + Clone> ReadBlockAlign<R> where R: Clone {
     pub fn new(
         block_idx_list: &[String],
-        record: &Record,
+        record: &R,
         block_align: &HashMap<String, Option<BlockAlign>>,
         strand: Strand,
     ) -> Self {
@@ -91,7 +95,7 @@ impl ReadBlockAlign {
     }
 
     /// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
-    pub fn read_block_info(record: &Record, block_info_list: &[BlockInfo]) -> Self {
+    pub fn read_block_info(record: &R, block_info_list: &[BlockInfo]) -> Self {
         let read = record.seq();
         let mut block_align_hash: HashMap<String, Option<BlockAlign>> = HashMap::new();
         let read_len = read.len();
@@ -265,7 +269,7 @@ impl ReadBlockAlign {
         &self,
         block_info_list: &[BlockInfo],
         export_block: &[String],
-    ) -> Option<Record> {
+    ) -> Option<fastq::Record> {
         let record = &self.record;
         let seq_len = record.seq().len();
 
@@ -310,7 +314,7 @@ impl ReadBlockAlign {
         }
 
         let new_record =
-            Record::with_attrs(record.id(), record.desc(), &new_seq_vec, &new_qual_vec);
+            fastq::Record::with_attrs(record.id(), record.desc(), &new_seq_vec, &new_qual_vec);
         Some(new_record)
     }
 
@@ -348,7 +352,7 @@ impl ReadBlockAlign {
         seq_hash.insert(
             "read".to_string(),
             JinjaSeq {
-                name: String::from_utf8(self.record.name().to_vec()).unwrap_or("".to_string()),
+                name: self.record.id().to_string(),
                 seq: String::from_utf8(self.record.seq().to_vec()).unwrap_or("".to_string()),
                 qual: String::from_utf8(self.record.qual().to_vec()).unwrap_or("".to_string()),
                 ..Default::default()
@@ -420,7 +424,7 @@ pub fn to_str(s: Option<String>) -> String {
 }
 
 impl JinjaSeq {
-    pub fn new(name: &str, record: &Record, start: usize, end: usize, strand: &Strand) -> Self {
+    pub fn new<R:Record>(name: &str, record: &R, start: usize, end: usize, strand: &Strand) -> Self {
         let seq_len = record.seq().len();
         let seq = &record.seq().to_vec()[start.min(seq_len)..end.min(seq_len)];
         let qual = &record.qual().to_vec()[start.min(seq_len)..end.min(seq_len)];
@@ -463,7 +467,7 @@ CCCCCCCCCCCCC";
     let read =
         b"CTGGGGGGGGGGGGGGCGATCGATCGTAAACCCCCCCCCCCCCCAACGCTTTTTTTTTTTTTTCTCGCTATATCGTATCGATGTAC";
     let read = b"AAAAAAAAAAAAAATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGCCCCCCCCCCCCC";
-    let record = Record::with_attrs("read01_rev", None, read, read);
+    let record = fastq::Record::with_attrs("read01_rev", None, read, read);
     let read_block_align = ReadBlockAlign::read_block_info(&record, &blockinfo_vec);
     let block_align = &read_block_align.block_align;
     for (k, v) in block_align {
