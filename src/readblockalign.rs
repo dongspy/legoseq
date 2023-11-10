@@ -1,25 +1,23 @@
 #![allow(unused_assignments)]
+#![allow(dead_code)]
+#![allow(unused)]
 use std::collections::HashMap;
-
-// use bio::io::fastq::Record;
-use bio_types::sequence::SequenceRead;
+use bio::io::fastq;
 use minijinja::value::Value;
 use minijinja::Template;
 use serde::{Deserialize, Serialize};
-use bio::io::{fasta, fastq};
 
 use crate::aligner::Alignment;
 use crate::blockinfo::get_block_info_fasta;
 // use crate::blockinfo::get_block_info_fasta;
+use crate::record::Record;
 use crate::utils::Strand;
 use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
-use crate::record::Record;
-
 
 /// save the fastq record and its block align information
 #[derive(Debug, Clone)]
-pub struct ReadBlockAlign<R:Record+Clone> {
+pub struct ReadBlockAlign<R: Record + Clone> {
     pub block_idx_list: Vec<String>,
     pub record: R,
     pub block_align: HashMap<String, Option<BlockAlign>>, // blockname: block_align
@@ -52,7 +50,10 @@ pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Optio
     block_align_list
 }
 
-impl<R:Record + Clone> ReadBlockAlign<R> where R: Clone {
+impl<R: Record + Clone> ReadBlockAlign<R>
+where
+    R: Clone,
+{
     pub fn new(
         block_idx_list: &[String],
         record: &R,
@@ -424,7 +425,13 @@ pub fn to_str(s: Option<String>) -> String {
 }
 
 impl JinjaSeq {
-    pub fn new<R:Record>(name: &str, record: &R, start: usize, end: usize, strand: &Strand) -> Self {
+    pub fn new<R: Record>(
+        name: &str,
+        record: &R,
+        start: usize,
+        end: usize,
+        strand: &Strand,
+    ) -> Self {
         let seq_len = record.seq().len();
         let seq = &record.seq().to_vec()[start.min(seq_len)..end.min(seq_len)];
         let qual = &record.qual().to_vec()[start.min(seq_len)..end.min(seq_len)];
