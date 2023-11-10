@@ -12,7 +12,7 @@ If the [Rust](https://www.rust-lang.org/tools/install) compiler and associated [
 
 ```
 git clone git@github.com:dongspy/legoseq.git
-cd ant
+cd legoseq
 cargo build --release
 target/release/legoseq --help
 ```
