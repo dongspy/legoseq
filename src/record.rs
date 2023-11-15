@@ -204,7 +204,7 @@ pub fn process_record_single<R: Record + Clone>(
             .or_insert_with(|| vec![File::create(barcode_file).unwrap()]);
         let template_str = read_block_align.template_str(&template);
         if let Some(template_str) = template_str {
-            write!(
+            writeln!(
                 barcode_handle.get(0).unwrap(),
                 "{}",
                 template_str
@@ -212,7 +212,7 @@ pub fn process_record_single<R: Record + Clone>(
             .unwrap();
         } else {
             let out_fq_handle = ud_fq_handle_vec.lock().unwrap();
-            write!(
+            writeln!(
                 out_fq_handle.get(0).unwrap(),
                 "{}", record_r1.to_str()
             )

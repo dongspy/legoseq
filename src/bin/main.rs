@@ -135,7 +135,7 @@ fn main() {
                     process_record_pair(
                         record_r1.unwrap(),
                         record_r2.unwrap(),
-                        "fastq",
+                        ext,
                         &block_info_list,
                         prefix,
                         outdir,
@@ -152,7 +152,7 @@ fn main() {
                 let barcode_handle_hash = barcode_handle_hash.clone();
                 process_record_single(
                     record_r1.unwrap(),
-                    "fastq",
+                    ext,
                     &block_info_list,
                     prefix,
                     outdir,
@@ -178,7 +178,7 @@ fn main() {
                     process_record_pair(
                         record_r1.unwrap(),
                         record_r2.unwrap(),
-                        "fasta",
+                        ext,
                         &block_info_list,
                         prefix,
                         outdir,
@@ -195,7 +195,7 @@ fn main() {
                 let barcode_handle_hash = barcode_handle_hash.clone();
                 process_record_single(
                     record_r1.unwrap(),
-                    "fasta",
+                    ext,
                     &block_info_list,
                     prefix,
                     outdir,
@@ -209,4 +209,7 @@ fn main() {
             })
         }
     }
+
+    info!("End");
+
 }
