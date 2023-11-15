@@ -2,4 +2,5 @@ test/output/
 **/.ipynb_checkpoints
 /target
 /data
+/debug
 .DS_Store
