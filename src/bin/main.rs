@@ -89,21 +89,22 @@ fn main() {
     let read_info_file = outdir.join(format!("{}.{}", prefix, "read_info.stat.tsv"));
     let read_info_handle: Arc<Mutex<File>> =
         Arc::new(Mutex::new(File::create(read_info_file.clone()).unwrap()));
-    BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
-        writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v).unwrap();
-    });
+    
     // 统计所有 flag 的数目
     let flag_stat_hash: Arc<Mutex<HashMap<usize, usize>>> = Arc::new(Mutex::new(HashMap::new()));
     let block_info_list = get_block_info_fasta_from_file(block_info_file, fasta_file).unwrap();
     let out_fq_handle_vec: Arc<Mutex<Vec<File>>>;
     let ud_fq_handle_vec: Arc<Mutex<Vec<File>>>;
     let barcode_handle_hash: Arc<Mutex<DashMap<String, Vec<File>>>> = Default::default();
+    BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
+        writeln!(read_info_handle.lock().unwrap(), "#idx:flag={}:{}", k, v).unwrap();
+    });
     if r2_file.is_some() {
         // output read info  statistics
         let out_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "template.r1", ext));
         let out_fq_file_r2 = outdir.join(format!("{}.{}.{}", prefix, "template.r2", ext));
-        let ud_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "undetermined.r1", ext));
-        let ud_fq_file_r2 = outdir.join(format!("{}.{}.{}", prefix, "undetermined.r2", ext));
+        let ud_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "undetermined.r1", input_type));
+        let ud_fq_file_r2 = outdir.join(format!("{}.{}.{}", prefix, "undetermined.r2", input_type));
         out_fq_handle_vec = Arc::new(Mutex::new(vec![
             File::create(out_fq_file_r1.clone()).unwrap(),
             File::create(out_fq_file_r2.clone()).unwrap(),
@@ -114,7 +115,7 @@ fn main() {
         ]));
     } else {
         let out_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "template", ext));
-        let ud_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "undetermined", ext));
+        let ud_fq_file_r1 = outdir.join(format!("{}.{}.{}", prefix, "undetermined", input_type));
         out_fq_handle_vec = Arc::new(Mutex::new(vec![
             File::create(out_fq_file_r1.clone()).unwrap()
         ]));
@@ -210,6 +211,15 @@ fn main() {
         }
     }
 
+    // write read flag stat file
+    let flag_stat_file = outdir.join(format!("{}.{}", prefix, "block_flag.stat.tsv"));
+    let mut flag_stat_handle = File::create(flag_stat_file).unwrap();
+    BLOCKFLAGS.lock().unwrap().iter().for_each(|(k, v)| {
+        writeln!(flag_stat_handle, "#idx:flag={}:{}", k, v).unwrap();
+    });
+    flag_stat_hash.lock().unwrap().iter().for_each(|(k, v)| {
+        write!(flag_stat_handle, "{}\t{}\n", k, v);
+    });
     info!("End");
 
 }

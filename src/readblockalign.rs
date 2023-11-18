@@ -11,7 +11,7 @@ use crate::aligner::Alignment;
 use crate::blockinfo::get_block_info_fasta;
 // use crate::blockinfo::get_block_info_fasta;
 use crate::record::Record;
-use crate::utils::Strand;
+use crate::utils::{Strand, revcomp};
 use crate::utils::{check_vec_equal, dna_to_spans};
 use crate::{blockalign::BlockAlign, blockinfo::BlockInfo};
 
@@ -432,6 +432,9 @@ impl JinjaSeq {
         end: usize,
         strand: &Strand,
     ) -> Self {
+        if start > end{
+            return JinjaSeq::default();
+        }
         let seq_len = record.seq().len();
         let seq = &record.seq().to_vec()[start.min(seq_len)..end.min(seq_len)];
         let qual = &record.qual().to_vec()[start.min(seq_len)..end.min(seq_len)];
@@ -454,26 +457,25 @@ impl JinjaSeq {
 #[test]
 fn test_block_align_read_with_insert() {
     let blockinfo_str = "idx	seq_type	fasta_seq_id	max_mismatch	query_start	query_end	seq_len	method
-Fix_0	Fix	aa1,aa2	2				ANT
-Variable_1	Variable	aa1,aa2	2				ANT
-Fix_2	Fix	cc1,cc2	2				ANT";
+Fix_0	Fix	AAACCTGAGAAACCAT	2				ANT
+Variable_1	Variable		2				ANT
+Fix_2	Fix	GTCACGGGTATATGAG	2				ANT
+Variable_3	Variable		2				ANT
+Fix_4	Fix	GTCATTTAGAACAACT	2				ANT";
     // println!("{}", blockinfo_str);
-    let fasta_file = ">aa1
-AAAAAAAAAAAAA
->aa2
-ATCCTAAATTACCA
->bb1
-TTTTTTTTTTTTTT
->bb2
-ATCGCTCGTAAAAA
->cc1
-ATCGATCTTAAAAA
->cc2
-CCCCCCCCCCCCC";
+    let fasta_file = ">AAACCTGAGAAACCAT
+AAACCTGAGAAACCAT
+>GTCACGGGTATATGAG
+GTCACGGGTATATGAG
+>GTCATTTAGAACAACT
+CCCCGACAAACGA
+    ";
     let blockinfo_vec = get_block_info_fasta(blockinfo_str, fasta_file).unwrap();
     let read =
         b"CTGGGGGGGGGGGGGGCGATCGATCGTAAACCCCCCCCCCCCCCAACGCTTTTTTTTTTTTTTCTCGCTATATCGTATCGATGTAC";
-    let read = b"AAAAAAAAAAAAAATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGCCCCCCCCCCCCC";
+    let read = b"TCTTTCGTTTGTCGGGGTTGGCCGGGTCTTGCGGCACCTCAATGAATAGCGTTCGCTGATGTGGCACTGCCTCGCCTAGTAGTAAAGGCTACTGCTCATATACCCGTGACAGGACCGCGGAGGAGCGCCAGCCATGGTTTCTCAGGTTTG";
+    let read_rev = revcomp(read);
+    dbg!(std::str::from_utf8(&read_rev));
     let record = fastq::Record::with_attrs("read01_rev", None, read, read);
     let read_block_align = ReadBlockAlign::read_block_info(&record, &blockinfo_vec);
     let block_align = &read_block_align.block_align;
