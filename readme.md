@@ -8,7 +8,7 @@ Manipulating sequencing data is like playing with LEGO bricks.
 
 * The DNA sequence is segmented into blocks based on the Fix (Anchor) sequence, with the flexibility of freely combining these blocks using [jinja2](https://github.com/mitsuhiko/minijinja/blob/main/COMPATIBILITY.md#expressions) templates.
 
-* Features support for the division of sample indices.
+* Supports for the demultiplex of sequence based on the index(barcode).
 
 * Compatible with a variety of sequencing platforms, including Illumina, Pacbio, and Nanopore.
 
@@ -42,9 +42,9 @@ The software supports block types of Fix, Variable, Index.
 
 * Fix refers to a given sequence of bases, which needs to be provided in advance, and legoseq uses an alignment algorithm to determine the position of the Fix sequence in the read;
 
-* Variable refers to the variable sequence, which needs to be determined according to the upstream and downstream Fix sequences.
+* Variable refers to the variable sequence, which needs to be determined according to the upstream and downstream Fix sequences;
 
-* barcode sequence indicates the Index. The barcode sequence must be provided in advance to perform the demultiplex sequence.
+* Index refers to the barcode sequence of a sample, which can be used for demultiplexing;
 
 For details, see test/data/blockinfo.tsv
  

@@ -26,7 +26,7 @@ pub struct ReadBlockAlign<R: Record + Clone> {
 
 /// read sequence mapping aganist the block sequence
 /// return BlockAlign vector
-pub fn block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Option<BlockAlign>> {
+pub fn _block_align_read(read: &[u8], block_info_list: &[BlockInfo]) -> Vec<Option<BlockAlign>> {
     let mut block_align_list: Vec<Option<BlockAlign>> = vec![];
 
     for block_info in block_info_list.iter().filter(|x| x.seq_type.is_variable()) {
@@ -95,7 +95,8 @@ where
         best_index_vec
     }
 
-    /// 获取 blockinfo 各个 block 的比对情况，包括 fix 和 variable
+    /// core function
+    /// get the alignment information of every block inlcluding Fix and Variable
     pub fn read_block_info(record: &R, block_info_list: &[BlockInfo]) -> Self {
         let read = record.seq();
         let mut block_align_hash: HashMap<String, Option<BlockAlign>> = HashMap::new();
@@ -173,7 +174,6 @@ where
             }
 
             // 末尾模块
-
             if block_ii == (block_info_len - 1) {
                 // query_end = Some(read_len);
                 query_end = if strand.is_reverse().unwrap() {
